@@ -8,6 +8,9 @@ Telegram. Message it (text or voice; Hebrew-first, understands English) and it h
 Calendar, Gmail, weather and market prices — and, if you opt in, it watches your calendar
 and inbox in the background and only interrupts you when something is genuinely worth it.
 
+> This is the **Telegram edition**, split off from [pika-personal-whatsapp-bot](https://github.com/marikbrest/pika-personal-whatsapp-bot)
+> (the WhatsApp version) so each channel keeps its own repository. The tool pipeline is shared in spirit; fixes may be ported between them.
+
 Everything runs on your own machine: one FastAPI process, one SQLite file, your own
 Telegram/Google/Gemini credentials. No SaaS in the middle, nothing to sign up for.
 

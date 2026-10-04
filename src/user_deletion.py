@@ -33,23 +33,23 @@ def _count(conn, table: str, where: str, args: tuple) -> int:
 def _plan(conn: sqlite3.Connection, user_id: int, remove_from_other_contacts: bool) -> list[tuple[str, str, str, tuple]]:
     """Ordered steps as (label, kind, sql_where_or_sql, args). kind is 'delete' (DELETE FROM label WHERE ...),
     'null' (UPDATE label SET col=NULL WHERE ...) - label carries 'table.column' for 'null'."""
-    user = conn.execute("SELECT whatsapp_number FROM users WHERE id = ?", (user_id,)).fetchone()
+    user = conn.execute("SELECT chat_id FROM users WHERE id = ?", (user_id,)).fetchone()
     number = user[0]
     steps: list[tuple[str, str, str, tuple]] = []
 
-    # a shadow-log row has no user column, only the WhatsApp message id - find it through the user's messages
+    # a shadow-log row has no user column, only the Telegram message id - find it through the user's messages
     steps.append((
         "intent_shadow_log", "delete",
-        "whatsapp_message_id IN (SELECT whatsapp_message_id FROM messages WHERE user_id = ? AND whatsapp_message_id IS NOT NULL)",
+        "incoming_message_id IN (SELECT incoming_message_id FROM messages WHERE user_id = ? AND incoming_message_id IS NOT NULL)",
         (user_id,),
     ))
 
     if remove_from_other_contacts:
         # other people's reminders addressed to this number go first (they reference those contact rows)
-        sub = "SELECT id FROM contacts WHERE whatsapp_number = ? AND owner_user_id != ?"
+        sub = "SELECT id FROM contacts WHERE chat_id = ? AND owner_user_id != ?"
         for t, col in _tables_referencing(conn, "contacts"):
             steps.append((t, "delete", f"{col} IN ({sub})", (number, user_id)))
-        steps.append(("contacts", "delete", "whatsapp_number = ? AND owner_user_id != ?", (number, user_id)))
+        steps.append(("contacts", "delete", "chat_id = ? AND owner_user_id != ?", (number, user_id)))
 
     for t, col in _tables_referencing(conn, "users"):
         if t in _SPECIAL:

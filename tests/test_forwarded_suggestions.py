@@ -52,13 +52,13 @@ def test_is_forwarded_message_false_with_no_context():
 def test_is_forwarded_message_false_with_unrelated_context():
     """A reply-to-a-message context (context.id set, no forwarded flag) must
     not be mistaken for a forwarded message."""
-    assert _is_forwarded_message({"context": {"id": "wamid.SOME_OTHER_MSG"}}) is False
+    assert _is_forwarded_message({"context": {"id": "msg.SOME_OTHER_MSG"}}) is False
 
 
 # ===== DB layer =====
 
 def test_save_and_get_pending_suggestion(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000010")
+    user_id = make_user(chat_id="972500000010")
     save_pending_suggestion(
         user_id, "manage_calendar", json.dumps({"action": "create"}), "רוצה שאוסיף ליומן?", "מחר ב-20 מבצע",
     )
@@ -69,7 +69,7 @@ def test_save_and_get_pending_suggestion(db_path, make_user):
 
 
 def test_get_pending_suggestion_returns_none_when_none_exists(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000011")
+    user_id = make_user(chat_id="972500000011")
     assert get_pending_suggestion(user_id) is None
 
 
@@ -91,7 +91,7 @@ def test_get_pending_suggestion_expires_a_stale_suggestion(db_path, make_user):
     """A suggestion older than PENDING_SUGGESTION_TTL_HOURS must not be
     confirmable by a much later, unrelated "כן" - it is marked 'expired'
     (not silently dropped) and treated as if none were pending."""
-    user_id = make_user(whatsapp_number="972500000014")
+    user_id = make_user(chat_id="972500000014")
     suggestion_id = save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
     _backdate_suggestion(suggestion_id, PENDING_SUGGESTION_TTL_HOURS + 1)
 
@@ -106,14 +106,14 @@ def test_get_pending_suggestion_expires_a_stale_suggestion(db_path, make_user):
 
 
 def test_get_pending_suggestion_does_not_expire_a_fresh_suggestion(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000015")
+    user_id = make_user(chat_id="972500000015")
     save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
     assert get_pending_suggestion(user_id) is not None
 
 
 def test_update_suggestion_status_is_ownership_checked(db_path, make_user):
-    owner_id = make_user(whatsapp_number="972500000012")
-    other_id = make_user(whatsapp_number="972500000013")
+    owner_id = make_user(chat_id="972500000012")
+    other_id = make_user(chat_id="972500000013")
     save_pending_suggestion(owner_id, "manage_calendar", "{}", "q?", "src")
     suggestion = get_pending_suggestion(owner_id)
 
@@ -176,7 +176,7 @@ def test_suggest_action_fences_the_forwarded_content_as_untrusted(db_path):
 
 
 def test_suggest_action_saves_a_pending_suggestion_on_a_real_tool_match(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000020")
+    user_id = make_user(chat_id="972500000020")
     calendar_tool = MagicMock()
     calendar_tool.name = "manage_calendar"
     calendar_tool.description = "Manages calendar events."
@@ -256,7 +256,7 @@ def test_suggest_action_supersedes_an_earlier_unanswered_suggestion(db_path, mak
     its own new proposal (not be silently skipped, the original batch 9
     behavior), and must mark the old one 'superseded' rather than leaving
     two suggestions both claiming to be 'pending'."""
-    user_id = make_user(whatsapp_number="972500000040")
+    user_id = make_user(chat_id="972500000040")
     save_pending_suggestion(user_id, "create_reminder", "{}", "old question?", "old source")
     old_suggestion = get_pending_suggestion(user_id)
 
@@ -293,7 +293,7 @@ def test_suggest_action_supersedes_an_earlier_unanswered_suggestion(db_path, mak
 # ===== _check_for_duplicate_action =====
 
 def test_check_for_duplicate_action_finds_a_similar_existing_reminder(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000041")
+    user_id = make_user(chat_id="972500000041")
     from src.db.models import save_reminder
     save_reminder(
         user_id, "לקנות חלב", "once", "2026-09-15T10:00:00", None,
@@ -307,7 +307,7 @@ def test_check_for_duplicate_action_finds_a_similar_existing_reminder(db_path, m
 
 
 def test_check_for_duplicate_action_no_note_for_a_clearly_different_reminder(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000042")
+    user_id = make_user(chat_id="972500000042")
     from src.db.models import save_reminder
     save_reminder(
         user_id, "לקנות חלב", "once", "2026-09-15T10:00:00", None,
@@ -391,7 +391,7 @@ def test_confirm_suggestion_with_no_pending_suggestion(db_path):
 
 
 def test_confirm_suggestion_dismiss_marks_it_dismissed(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000030")
+    user_id = make_user(chat_id="972500000030")
     save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
 
     reply = _handle_confirm_suggestion_tool({"id": user_id}, {"action": "dismiss"})
@@ -401,7 +401,7 @@ def test_confirm_suggestion_dismiss_marks_it_dismissed(db_path, make_user):
 
 
 def test_confirm_suggestion_confirm_executes_the_exact_stored_tool_and_args(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000031")
+    user_id = make_user(chat_id="972500000031")
     save_pending_suggestion(
         user_id, "manage_calendar", json.dumps({"action": "create", "title": "מבצע"}), "q?", "src",
     )
@@ -427,7 +427,7 @@ def test_confirm_suggestion_confirm_marks_failed_not_confirmed_on_a_validation_f
     auto-suppressed)."""
     from src.intent_parser import FALLBACK_REPLY
 
-    user_id = make_user(whatsapp_number="972500000033")
+    user_id = make_user(chat_id="972500000033")
     save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
 
     fake_tool = MagicMock()
@@ -447,7 +447,7 @@ def test_confirm_suggestion_confirm_marks_failed_not_confirmed_on_a_validation_f
 def test_confirm_suggestion_confirm_with_a_now_unknown_tool_dismisses_gracefully(db_path, make_user):
     """Defensive: if the tool was somehow removed from the registry between
     proposal and confirmation, this must not crash."""
-    user_id = make_user(whatsapp_number="972500000032")
+    user_id = make_user(chat_id="972500000032")
     save_pending_suggestion(user_id, "some_removed_tool", "{}", "q?", "src")
 
     with patch("src.tools.registry.get_tool", return_value=None):
@@ -494,7 +494,7 @@ def test_suggest_action_appends_the_source_quote_to_the_confirmation(db_path):
 # ===== get_suppressed_suggestion_tools =====
 
 def test_get_suppressed_suggestion_tools_suppresses_after_repeated_dismissals(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000050")
+    user_id = make_user(chat_id="972500000050")
     for _ in range(3):
         sid = save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
         update_suggestion_status(sid, "dismissed", user_id)
@@ -503,7 +503,7 @@ def test_get_suppressed_suggestion_tools_suppresses_after_repeated_dismissals(db
 
 
 def test_get_suppressed_suggestion_tools_does_not_suppress_below_threshold(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000051")
+    user_id = make_user(chat_id="972500000051")
     for _ in range(2):
         sid = save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
         update_suggestion_status(sid, "dismissed", user_id)
@@ -512,7 +512,7 @@ def test_get_suppressed_suggestion_tools_does_not_suppress_below_threshold(db_pa
 
 
 def test_get_suppressed_suggestion_tools_never_suppresses_a_tool_confirmed_at_least_once(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000052")
+    user_id = make_user(chat_id="972500000052")
     for _ in range(4):
         sid = save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
         update_suggestion_status(sid, "dismissed", user_id)
@@ -526,7 +526,7 @@ def test_get_suppressed_suggestion_tools_never_suppresses_a_tool_confirmed_at_le
 def test_get_suppressed_suggestion_tools_ignores_superseded_and_expired_rows(db_path, make_user):
     """Superseded/expired are state transitions, not user rejections - must
     never count toward suppression."""
-    user_id = make_user(whatsapp_number="972500000053")
+    user_id = make_user(chat_id="972500000053")
     for status in ("superseded", "expired", "superseded"):
         sid = save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
         update_suggestion_status(sid, status, user_id)
@@ -535,7 +535,7 @@ def test_get_suppressed_suggestion_tools_ignores_superseded_and_expired_rows(db_
 
 
 def test_suggest_action_excludes_a_suppressed_tool_from_the_candidate_set(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000054")
+    user_id = make_user(chat_id="972500000054")
     for _ in range(3):
         sid = save_pending_suggestion(user_id, "manage_calendar", "{}", "q?", "src")
         update_suggestion_status(sid, "dismissed", user_id)

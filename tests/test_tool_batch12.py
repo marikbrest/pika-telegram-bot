@@ -55,7 +55,7 @@ def test_validate(args, expected):
 @pytest.fixture()
 def user(make_user):
     number = "972500000001"
-    return {"id": make_user(whatsapp_number=number), "whatsapp_number": number}
+    return {"id": make_user(chat_id=number), "chat_id": number}
 
 
 def test_set_creates_a_row_and_confirms(user):
@@ -169,11 +169,11 @@ def test_set_week_at_the_cap_reports_partial_progress(user, monkeypatch):
 
 def test_kid_asking_about_their_own_schedule_resolves_via_phone_number(make_user):
     """A registered kid-user with no schedule under their own account should
-    see what a parent saved for them, matched via their own WhatsApp number
-    against a contact the parent saved (find_kid_schedule_owner_by_whatsapp_number)."""
-    parent = {"id": make_user(whatsapp_number="972500000001"), "whatsapp_number": "972500000001"}
+    see what a parent saved for them, matched via their own Telegram chat id
+    against a contact the parent saved (find_kid_schedule_owner_by_chat_id)."""
+    parent = {"id": make_user(chat_id="972500000001"), "chat_id": "972500000001"}
     kid_number = "972500000072"
-    kid_user = {"id": make_user(whatsapp_number=kid_number, display_name="נועה"), "whatsapp_number": kid_number}
+    kid_user = {"id": make_user(chat_id=kid_number, display_name="נועה"), "chat_id": kid_number}
 
     from src.db.models import save_contact
     save_contact(parent["id"], "נועה", kid_number)
@@ -185,7 +185,7 @@ def test_kid_asking_about_their_own_schedule_resolves_via_phone_number(make_user
 
 def test_kid_with_no_saved_schedule_anywhere_gets_the_normal_empty_message(make_user):
     kid_number = "972500000073"
-    kid_user = {"id": make_user(whatsapp_number=kid_number, display_name="תומר"), "whatsapp_number": kid_number}
+    kid_user = {"id": make_user(chat_id=kid_number, display_name="תומר"), "chat_id": kid_number}
 
     reply = _handle_kids_schedule(kid_user, {"action": "list"})
     assert "אין עדיין מערכת" in reply
@@ -194,8 +194,8 @@ def test_kid_with_no_saved_schedule_anywhere_gets_the_normal_empty_message(make_
 def test_explicit_kid_name_never_triggers_the_phone_fallback(make_user):
     """A parent asking for a specific kid by name must only ever see their
     OWN saved data for that name, never fall through to phone matching."""
-    parent = {"id": make_user(whatsapp_number="972500000001"), "whatsapp_number": "972500000001"}
-    other_parent = {"id": make_user(whatsapp_number="972500000002"), "whatsapp_number": "972500000002"}
+    parent = {"id": make_user(chat_id="972500000001"), "chat_id": "972500000001"}
+    other_parent = {"id": make_user(chat_id="972500000002"), "chat_id": "972500000002"}
 
     _handle_kids_schedule(other_parent, {"action": "set", "kid_name": "דני", "day_of_week": "mon", "content": "חשבון"})
     reply = _handle_kids_schedule(parent, {"action": "list", "kid_name": "דני"})
@@ -203,8 +203,8 @@ def test_explicit_kid_name_never_triggers_the_phone_fallback(make_user):
 
 
 def test_one_users_schedule_is_isolated_from_another(make_user):
-    user_a = {"id": make_user(whatsapp_number="972500000001"), "whatsapp_number": "972500000001"}
-    user_b = {"id": make_user(whatsapp_number="972500000002"), "whatsapp_number": "972500000002"}
+    user_a = {"id": make_user(chat_id="972500000001"), "chat_id": "972500000001"}
+    user_b = {"id": make_user(chat_id="972500000002"), "chat_id": "972500000002"}
 
     _handle_kids_schedule(user_a, {"action": "set", "kid_name": "דני", "day_of_week": "mon", "content": "חשבון"})
     reply = _handle_kids_schedule(user_b, {"action": "list"})

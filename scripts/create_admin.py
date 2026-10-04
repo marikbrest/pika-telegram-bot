@@ -5,10 +5,10 @@ New users can only be added by an existing admin (via chat or the dashboard),
 so the very first admin has to be created out-of-band. Run once, after
 configuring .env:
 
-    python scripts/create_admin.py 972501234567 "Your Name"
+    python scripts/create_admin.py 123456789 "Your Name"
 
-The number is the admin's WhatsApp number in international format, digits only
-(no +). Safe to re-run: an existing number is just promoted to admin.
+The number is the admin's Telegram chat id (digits only; send /id to the bot or message
+@userinfobot to get it). Safe to re-run: an existing number is just promoted to admin.
 """
 import os
 import sys
@@ -27,7 +27,7 @@ def main() -> int:
     created = admin_add_user(number, name)
     conn = get_connection()
     try:
-        conn.execute("UPDATE users SET is_admin = 1, is_active = 1 WHERE whatsapp_number = ?", (number,))
+        conn.execute("UPDATE users SET is_admin = 1, is_active = 1 WHERE chat_id = ?", (number,))
         conn.commit()
     finally:
         conn.close()

@@ -250,8 +250,8 @@ def test_cancel_stops_the_nag(user):
 
 
 def test_one_users_reminders_are_isolated_from_another(make_user):
-    user_a = {"id": make_user(whatsapp_number="972500000001"), "timezone": "Asia/Jerusalem"}
-    user_b = {"id": make_user(whatsapp_number="972500000002"), "timezone": "Asia/Jerusalem"}
+    user_a = {"id": make_user(chat_id="972500000001"), "timezone": "Asia/Jerusalem"}
+    user_b = {"id": make_user(chat_id="972500000002"), "timezone": "Asia/Jerusalem"}
     save_contact(user_a["id"], "דני", "972500000071")
 
     _handle_persistent_reminders(user_a, {"action": "create", "recipient_name": "דני", "content": "X"})
@@ -263,8 +263,8 @@ def test_one_users_reminders_are_isolated_from_another(make_user):
 def test_both_parents_can_create_a_reminder_for_the_same_kid(make_user):
     """Yossi's explicit request: both he and Ronit should be able to add
     persistent reminders for the same kid, each via their own saved contact."""
-    yossi = {"id": make_user(whatsapp_number="972500000001"), "timezone": "Asia/Jerusalem"}
-    ronit = {"id": make_user(whatsapp_number="972500000002"), "timezone": "Asia/Jerusalem"}
+    yossi = {"id": make_user(chat_id="972500000001"), "timezone": "Asia/Jerusalem"}
+    ronit = {"id": make_user(chat_id="972500000002"), "timezone": "Asia/Jerusalem"}
     save_contact(yossi["id"], "דני", "972500000071")
     save_contact(ronit["id"], "דני", "972500000071")
 

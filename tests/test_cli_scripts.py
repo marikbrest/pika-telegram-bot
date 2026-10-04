@@ -22,7 +22,7 @@ def _run(script, args=(), env_extra=None, stdin=""):
 def test_doctor_fails_and_names_what_is_missing_on_an_empty_environment(tmp_path):
     r = _run("doctor.py", env_extra={"DB_PATH": str(tmp_path / "x.db")})
     assert r.returncode == 1
-    assert "WHATSAPP_ACCESS_TOKEN" in r.stdout and "GEMINI_API_KEY" in r.stdout
+    assert "TELEGRAM_BOT_TOKEN" in r.stdout and "GEMINI_API_KEY" in r.stdout
 
 
 def test_doctor_passes_a_complete_offline_setup(tmp_path):
@@ -30,8 +30,7 @@ def test_doctor_passes_a_complete_offline_setup(tmp_path):
 
     db = tmp_path / "a.db"
     env = {
-        "DB_PATH": str(db), "WHATSAPP_ACCESS_TOKEN": "t", "WHATSAPP_PHONE_NUMBER_ID": "1",
-        "WHATSAPP_WEBHOOK_VERIFY_TOKEN": "v", "WHATSAPP_APP_SECRET": "s", "GEMINI_API_KEY": "g",
+        "DB_PATH": str(db), "TELEGRAM_BOT_TOKEN": "t", "GEMINI_API_KEY": "g",
         "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
     }
     # no admin yet -> database check warns, and only warnings => exit 0
@@ -91,8 +90,7 @@ def _doctor_env(tmp_path, **extra):
     from cryptography.fernet import Fernet
 
     env = {
-        "DB_PATH": str(tmp_path / "d.db"), "WHATSAPP_ACCESS_TOKEN": "t", "WHATSAPP_PHONE_NUMBER_ID": "1",
-        "WHATSAPP_WEBHOOK_VERIFY_TOKEN": "v", "WHATSAPP_APP_SECRET": "s", "GEMINI_API_KEY": "g",
+        "DB_PATH": str(tmp_path / "d.db"), "TELEGRAM_BOT_TOKEN": "t", "GEMINI_API_KEY": "g",
         "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
         "OPERATOR_NAME": "", "ADMIN_CONTACT_EMAIL": "",
     }

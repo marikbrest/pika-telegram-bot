@@ -56,7 +56,7 @@ def _age_prebrief_row(user_id, event_id, days_ago):
 # ===== delete_old_meeting_prebrief_sent =====
 
 def test_delete_old_meeting_prebrief_sent_removes_only_old_rows(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     mark_meeting_prebriefed(1, "old-event")
     mark_meeting_prebriefed(1, "recent-event")
     _age_prebrief_row(1, "old-event", 90)
@@ -73,7 +73,7 @@ def test_delete_old_meeting_prebrief_sent_removes_only_old_rows(db_path, make_us
 # ===== delete_old_gmail_seen_messages =====
 
 def test_delete_old_gmail_seen_messages_removes_only_old_rows(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     mark_gmail_message_seen(1, "old-message")
     mark_gmail_message_seen(1, "recent-message")
     _age_gmail_row(1, "old-message", 90)
@@ -88,7 +88,7 @@ def test_delete_old_gmail_seen_messages_removes_only_old_rows(db_path, make_user
 
 
 def test_delete_old_gmail_seen_messages_returns_zero_when_nothing_is_old(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     mark_gmail_message_seen(1, "recent-message")
     assert delete_old_gmail_seen_messages(60) == 0
 
@@ -96,7 +96,7 @@ def test_delete_old_gmail_seen_messages_returns_zero_when_nothing_is_old(db_path
 # ===== delete_old_proactive_notification_log =====
 
 def test_delete_old_proactive_notification_log_removes_only_old_rows(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     old_id = reserve_proactive_notification_slot(1, cap=100, category="a", summary="old")
     reserve_proactive_notification_slot(1, cap=100, category="b", summary="recent")
     _age_notification_row(old_id, 90)
@@ -113,7 +113,7 @@ def test_delete_old_proactive_notification_log_removes_only_old_rows(db_path, ma
 # ===== check_and_cleanup_proactive_data =====
 
 def test_cleanup_job_calls_both_deletions(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     mark_gmail_message_seen(1, "old-message")
     _age_gmail_row(1, "old-message", 90)
 
@@ -126,6 +126,6 @@ def test_cleanup_job_calls_both_deletions(db_path, make_user):
 
 
 def test_cleanup_job_survives_a_db_failure(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     with patch("src.db.models.delete_old_gmail_seen_messages", side_effect=RuntimeError("boom")):
         check_and_cleanup_proactive_data()  # must not raise

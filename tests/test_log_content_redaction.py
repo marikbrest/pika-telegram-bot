@@ -21,17 +21,13 @@ def test_truncate_for_log_truncates_long_text_and_notes_the_original_length():
     assert "500 chars total" in result
 
 
-def test_whatsapp_missing_token_log_does_not_include_the_message_body(capsys):
-    from src.integrations import whatsapp
+def test_telegram_missing_token_log_does_not_include_the_message_body(capsys):
+    from src.integrations import telegram
 
-    with patch.object(whatsapp, "WHATSAPP_ACCESS_TOKEN", ""):
-        whatsapp._post_message({
-            "messaging_product": "whatsapp", "to": "972500000001", "type": "text",
-            "text": {"body": "תוכן פרטי שאסור שיודלף ללוג"},
-        })
+    with patch.object(telegram, "TELEGRAM_BOT_TOKEN", ""):
+        assert telegram.send_text_message(to="972500000001", body="תוכן פרטי שאסור שיודלף ללוג") is False
 
-    captured = capsys.readouterr()
-    assert "תוכן פרטי שאסור שיודלף ללוג" not in captured.out
+    assert "תוכן פרטי שאסור שיודלף ללוג" not in capsys.readouterr().out
 
 
 def test_gemini_adapter_no_function_call_log_does_not_repr_the_response(capsys):

@@ -17,8 +17,8 @@ MESSAGES = {
     # ----- reminders -----
     "reminder.delivery_failed_notice": (
         "⚠️ לא הצלחתי למסור את התזכורת ל-{recipient}: \"{content}\". "
-        "כנראה כי הוא/היא לא שלחו הודעה לבוט ב-24 השעות האחרונות "
-        "(מגבלה של WhatsApp). כדאי לבקש מהם לשלוח לבוט הודעה כלשהי."
+        "כנראה כי הוא/היא עוד לא התחילו שיחה עם הבוט או שחסמו אותו. "
+        "כדאי לבקש מהם ללחוץ Start בבוט."
     ),
     "reminder.delivery_failed_logged": "⚠️ לא הצלחתי למסור את התזכורת ל-{recipient}.",
     "reminder.from_owner": " מ-{owner}",
@@ -161,15 +161,15 @@ MESSAGES = {
         "אם עוד לא חיברת את גוגל, אפשר להגיד לי \"תחבר לי את הג'ימייל\"."
     ),
 
-    # ----- Google OAuth callback (browser page + the WhatsApp message that follows) -----
+    # ----- Google OAuth callback (browser page + the Telegram message that follows) -----
     "oauth.page_direction": "rtl",
     "oauth.success_title": "✅ החיבור הצליח!",
-    "oauth.success_body": "אפשר לסגור את החלון הזה ולחזור לוואטסאפ.",
+    "oauth.success_body": "אפשר לסגור את החלון הזה ולחזור לטלגרם.",
     "oauth.error_title": "⚠️ החיבור נכשל",
-    "oauth.error_footer": "אפשר לחזור לוואטסאפ ולנסות שוב.",
+    "oauth.error_footer": "אפשר לחזור לטלגרם ולנסות שוב.",
     "oauth.cancelled_message": "החיבור לגוגל בוטל. אפשר לנסות שוב בכל רגע.",
     "oauth.cancelled_page": "ההרשאה בוטלה.",
-    "oauth.expired_link": "הקישור פג תוקף. תבקש קישור חדש בוואטסאפ.",
+    "oauth.expired_link": "הקישור פג תוקף. תבקש קישור חדש בטלגרם.",
     "oauth.user_not_found": "משתמש לא נמצא.",
     "oauth.bad_request": "בקשה לא תקינה.",
     "oauth.failed_message": "החיבור לגוגל נכשל, תוכל לנסות שוב?",
@@ -283,7 +283,7 @@ MESSAGES = {
     "wh.manage_proactive_settings.10": "עדכנתי - מקסימום {cap} התראות יזומות ביום.",
     "wh.manage_proactive_settings.11": "כמה דקות לפני פגישה תרצה שאזכיר לך?",
     "wh.manage_proactive_settings.12": "עדכנתי - אשלח תדריך {lead_minutes} דקות לפני כל פגישה.",
-    "wh.manage_vip_senders.1": "איזו כתובת מייל או מספר טלפון תרצה להוסיף כ-VIP?",
+    "wh.manage_vip_senders.1": "איזו כתובת מייל או מזהה צ'אט טלגרם תרצה להוסיף כ-VIP?",
     "wh.manage_vip_senders.2": "לא מצאתי איש קשר בשם \"{identifier}\". אפשר לתת את כתובת המייל או מספר הטלפון שלו/ה ישירות?",
     "wh.manage_vip_senders.3": "הוספתי את {identifier}{label_part} לרשימת ה-VIP שלך - עדכונים שקשורים אליו/ה יעקפו שעות שקט.",
     "wh.manage_vip_senders.4": "אין לך אף אחד ברשימת ה-VIP כרגע.",
@@ -366,12 +366,12 @@ MESSAGES = {
     "wh.match_reminder.2": "לא הצלחתי לזהות איזו תזכורת התכוונת. תגיד \"מה יש לי מתוזמן\" כדי לראות את הרשימה המלאה.",
     "wh.match_reminder.3": "יש לי כמה תזכורות שמתאימות לתיאור, תוכל לדייק? (תגיד \"מה יש לי מתוזמן\" לרשימה המלאה)",
     "wh.user_manage.1": "ניהול משתמשים זמין רק למנהל המערכת.",
-    "wh.user_manage.2": "המספר לא נראה תקין. תוכל לתת אותו בפורמט בינלאומי, למשל 972501234567?",
+    "wh.user_manage.2": "מזהה הצ'אט לא נראה תקין. זה מספר (למשל 123456789) שמקבלים מהבוט @userinfobot או מהפקודה /id של הבוט הזה.",
     "wh.user_manage.3": "{display_name} כבר משתמש פעיל.",
     "wh.user_manage.4": "✅ הפעלתי מחדש את {display_name} ({number}).",
     "wh.user_manage.5": "לא הצלחתי להוסיף את המשתמש, תוכל לנסות שוב?",
-    "wh.user_manage.6": "✅ {display_name} ({number}) יכול עכשיו להשתמש בבוט.\nכדאי שישלח הודעה כלשהי כדי להתחיל — זה גם פותח את חלון 24 השעות שמאפשר לשלוח אליו תזכורות.",
-    "wh.user_manage.7": "לא מצאתי משתמש עם המספר {number}.",
+    "wh.user_manage.6": "✅ {display_name} ({number}) יכול עכשיו להשתמש בבוט.\nהוא צריך לפתוח את הבוט בטלגרם וללחוץ Start כדי שאוכל לשלוח לו הודעות ותזכורות.",
+    "wh.user_manage.7": "לא מצאתי משתמש עם מזהה הצ'אט {number}.",
     "wh.user_manage.8": "אני לא אשבית אותך מעצמך — תעשה את זה מהדאשבורד אם אתה בטוח.",
     "wh.user_manage.9": "{display_name} כבר מושבת.",
     "wh.user_manage.10": "🚫 {display_name} ({number}) כבר לא יכול להשתמש בבוט. הנתונים שלו נשמרו.",
@@ -432,7 +432,7 @@ MESSAGES = {
     "wh.manage_my_data.9": "🔗 קישורים שמורים: {saved_links}",
     "wh.manage_my_data.10": "🧠 עובדות שנשמרו עליך: {remembered_facts}",
     "wh.manage_my_data.11": "הנה מה ששמור אצלי עליך:\n\n",
-    "wh.reminder.2": "תוסיף איש קשר {name} + מספר הטלפון שלו.",
+    "wh.reminder.2": "תוסיף איש קשר {name} + מזהה הצ'אט שלו בטלגרם.",
     "wh.persistent_reminders.7": " ({schedule_desc}, מתחדש בכל פעם)",
     "wh.persistent_reminders.8": "עכשיו",
     "wh.persistent_reminders.9": "בזמן שנקבע",
@@ -527,5 +527,10 @@ MESSAGES = {
     # ----- welcome message sent to newly added users -----
     "welcome.operator_suffix": " של {operator}",
     "welcome.openai_note": " (או ל-OpenAI, אם תבחר בו)",
-    "welcome.message": "👋 הוספו אותך לעוזר האישי{who}.\nמה חשוב לדעת על המידע שלך: ההודעות שלך נשלחות ל-Gemini של Google{openai_note} ועוברות דרך WhatsApp של מטא, ומי שמפעיל את הבוט יכול טכנית לקרוא אותן.\nמדיניות פרטיות: {privacy_url}\nתנאי שימוש: {terms_url}\nבכל רגע אפשר לכתוב לי \"תראה לי מה יש לך עליי\" או \"תמחק את ההיסטוריה שלי\".",
+    "welcome.message": "👋 הוספו אותך לעוזר האישי{who}.\nמה חשוב לדעת על המידע שלך: ההודעות שלך נשלחות ל-Gemini של Google{openai_note} ועוברות דרך טלגרם, ומי שמפעיל את הבוט יכול טכנית לקרוא אותן.\nמדיניות פרטיות: {privacy_url}\nתנאי שימוש: {terms_url}\nבכל רגע אפשר לכתוב לי \"תראה לי מה יש לך עליי\" או \"תמחק את ההיסטוריה שלי\".",
+
+    # ----- Telegram intake -----
+    "telegram.not_a_user": "הצ'אט הזה עדיין לא רשום אצל הבוט. מי שמפעיל את הבוט צריך להוסיף את מזהה הצ'אט שלך: {chat_id}",
+    "telegram.start": "היי{name}! אני מוכן. אפשר לכתוב לי למשל \"תזכיר לי מחר ב-9 להתקשר לרופא\", או /help לרשימה של מה שאני יודע לעשות.",
+    "telegram.your_chat_id": "מזהה הצ'אט שלך: {chat_id}",
 }

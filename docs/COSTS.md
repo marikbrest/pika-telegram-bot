@@ -26,7 +26,7 @@ contacts/facts, and the tool list. That context is why input tokens dominate.
 
 | Item | Cost |
 | --- | --- |
-| WhatsApp Cloud API | Free to receive and to reply within 24h of the user's last message. Template messages outside that window are billed per message by Meta (see their current rate card; for reference, 11 *Utility* reminder templates cost the author about $0.05). *Marketing*-categorised templates cost more. |
+| Telegram Bot API | Free: no per-message charges, no templates. |
 | Google Calendar / Gmail / Drive APIs | Free within normal quotas |
 | Weather (Open-Meteo), market quotes (Yahoo) | Free, no key |
 | Cloudflare Tunnel | Free |
@@ -36,6 +36,6 @@ contacts/facts, and the tool list. That context is why input tokens dominate.
 ## Keeping an eye on it
 
 - Ask the bot *"how much have I spent?"* for a month-to-date report.
-- The **cost guard** (`OWNER_WHATSAPP_NUMBER`, `COST_ALERT_BUDGET_USD`, default $15) sends a report
+- The **cost guard** (`OWNER_CHAT_ID`, `COST_ALERT_BUDGET_USD`, default $15) sends a report
   every two days and an immediate alert if the month crosses the budget — to the owner only.
 - Proactive mode adds one small Gemini call per detected calendar/email event, not per poll.

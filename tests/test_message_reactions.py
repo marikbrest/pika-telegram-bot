@@ -1,5 +1,5 @@
 """
-Batch 11 (2026-09-14): content-matched WhatsApp reactions. _pick_reaction_emoji
+Batch 11 (2026-09-14): content-matched Telegram reactions. _pick_reaction_emoji
 and _react_to_message_in_background are tested directly and synchronously
 (not through the real background thread), the same deliberate choice
 test_shadow_classification.py documents for _embed_message_in_background -
@@ -13,7 +13,7 @@ from unittest.mock import ANY, MagicMock, patch
 
 from src.webhook_handler import _pick_reaction_emoji, _react_to_message_in_background
 
-from .conftest import post_webhook, whatsapp_text_payload
+from .conftest import post_update, telegram_text_update
 
 
 def test_pick_reaction_emoji_returns_the_emoji_when_one_fits():
@@ -34,15 +34,15 @@ def test_pick_reaction_emoji_returns_none_on_call_failure():
 def test_react_to_message_in_background_sends_the_picked_emoji():
     with patch("src.webhook_handler._pick_reaction_emoji", return_value="😂"), \
          patch("src.webhook_handler.send_reaction") as mock_send:
-        _react_to_message_in_background("972500000001", "wamid.TEST", "זה ממש מצחיק")
+        _react_to_message_in_background("972500000001", "msg.TEST", "זה ממש מצחיק")
 
-    mock_send.assert_called_once_with("972500000001", "wamid.TEST", "😂")
+    mock_send.assert_called_once_with("972500000001", "msg.TEST", "😂")
 
 
 def test_react_to_message_in_background_sends_nothing_when_no_emoji_fits():
     with patch("src.webhook_handler._pick_reaction_emoji", return_value=None), \
          patch("src.webhook_handler.send_reaction") as mock_send:
-        _react_to_message_in_background("972500000001", "wamid.TEST", "מה השעה")
+        _react_to_message_in_background("972500000001", "msg.TEST", "מה השעה")
 
     mock_send.assert_not_called()
 
@@ -53,7 +53,7 @@ def test_react_to_message_in_background_survives_a_pick_failure():
     real reply either way, but it still must not raise."""
     with patch("src.webhook_handler._pick_reaction_emoji", side_effect=RuntimeError("boom")), \
          patch("src.webhook_handler.send_reaction") as mock_send:
-        _react_to_message_in_background("972500000001", "wamid.TEST", "הודעה")
+        _react_to_message_in_background("972500000001", "msg.TEST", "הודעה")
 
     mock_send.assert_not_called()
 
@@ -61,20 +61,20 @@ def test_react_to_message_in_background_survives_a_pick_failure():
 def test_react_to_message_in_background_survives_a_send_failure():
     with patch("src.webhook_handler._pick_reaction_emoji", return_value="👍"), \
          patch("src.webhook_handler.send_reaction", side_effect=RuntimeError("network error")):
-        _react_to_message_in_background("972500000001", "wamid.TEST", "תודה רבה")  # must not raise
+        _react_to_message_in_background("972500000001", "msg.TEST", "תודה רבה")  # must not raise
 
 
 def test_webhook_starts_a_background_reaction_thread_with_the_right_args(client, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     fake_result = {"intent": "chat", "reply": "hi"}
 
     with patch("src.webhook_handler._classify_text_with_cutover", return_value=fake_result), \
          patch("src.webhook_handler.send_text_message", return_value=True), \
          patch("src.webhook_handler.threading.Thread") as mock_thread_cls:
         mock_thread_cls.return_value = MagicMock()
-        post_webhook(client, whatsapp_text_payload("972500000001", "תודה רבה!"))
+        post_update(client, telegram_text_update("972500000001", "תודה רבה!"))
 
     mock_thread_cls.assert_called_once_with(
-        target=ANY, args=("972500000001", "wamid.TEST1", "תודה רבה!"), daemon=True,
+        target=ANY, args=("972500000001", "972500000001:1", "תודה רבה!"), daemon=True,
     )
     mock_thread_cls.return_value.start.assert_called_once()

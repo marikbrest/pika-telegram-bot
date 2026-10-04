@@ -11,20 +11,20 @@ from unittest.mock import patch
 
 from src.db import models
 
-from .conftest import post_webhook, whatsapp_text_payload
+from .conftest import post_update, telegram_text_update
 
 
 def _send(client, text, tool_call):
     with patch("src.tools.gemini_adapter.classify_with_tools", return_value=tool_call), \
          patch("src.webhook_handler.send_text_message", return_value=True) as mock_send:
-        post_webhook(client, whatsapp_text_payload("972500000001", text))
+        post_update(client, telegram_text_update("972500000001", text))
     mock_send.assert_called_once()
     return mock_send.call_args.kwargs["body"]
 
 
 def test_add_contact_via_tools_saves_once_and_replies_normally(client, make_user):
-    user_id = make_user(whatsapp_number="972500000001")
-    args = {"name": "Dana", "whatsapp_number": "972501234567", "reply_text": "Saved Dana"}
+    user_id = make_user(chat_id="972500000001")
+    args = {"name": "Dana", "chat_id": "972501234567", "reply_text": "Saved Dana"}
 
     reply = _send(client, "add contact Dana 0501234567", ("add_contact", args))
 
@@ -34,7 +34,7 @@ def test_add_contact_via_tools_saves_once_and_replies_normally(client, make_user
 
 
 def test_web_search_via_tools_is_not_dispatched_a_second_time(client, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     with patch("src.tools.batch2._handle_web_search", return_value="result A") as tool_handler, \
          patch("src.webhook_handler._handle_web_search", return_value="result B") as legacy_handler:
         reply = _send(client, "search the web", ("web_search", {"query": "x"}))
@@ -45,7 +45,7 @@ def test_web_search_via_tools_is_not_dispatched_a_second_time(client, make_user)
 
 
 def test_connect_google_via_tools_has_a_single_link(client, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     with patch("src.webhook_handler.build_auth_url", return_value="https://example.test/auth") as mock_url:
         reply = _send(client, "connect google", ("connect_google", {"reply_text": "Here you go"}))
 

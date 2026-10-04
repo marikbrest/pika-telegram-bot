@@ -24,7 +24,7 @@ def execute_tool(tool: Tool, user: dict, args: dict) -> str:
         # but that only proves the SCHEMA asks for it - Gemini's own compliance
         # isn't literally guaranteed (same reasoning intent_parser._validate_result
         # already applies to every "required" field it hand-checks today), so this
-        # still falls back rather than risk sending an empty WhatsApp message.
+        # still falls back rather than risk sending an empty Telegram message.
         reply_text = args.get("reply_text") or FALLBACK_REPLY
         try:
             tool.handler(user, args)  # side effect only; return value unused

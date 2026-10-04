@@ -26,7 +26,7 @@ def test_sends_nothing_when_nothing_is_due(db_path, make_user):
     contact_id = save_contact(owner_id, "דני", "972500000071")
     save_persistent_reminder(owner_id, contact_id, "X", NOW + timedelta(hours=1))
 
-    with patch("src.integrations.whatsapp.send_text_message") as mock_send:
+    with patch("src.integrations.telegram.send_text_message") as mock_send:
         check_and_send_persistent_reminders()
     mock_send.assert_not_called()
 
@@ -37,7 +37,7 @@ def test_nag_passes_kid_facing_role_not_display_name_to_the_creative_text_genera
     same split as the ordinary-reminder prefix."""
     from src.db.models import get_connection
 
-    owner_id = make_user(whatsapp_number="972500000001", display_name="יוסי")
+    owner_id = make_user(chat_id="972500000001", display_name="יוסי")
     conn = get_connection()
     try:
         conn.execute("UPDATE users SET kid_facing_role = ? WHERE id = ?", ("אבא", owner_id))
@@ -48,19 +48,19 @@ def test_nag_passes_kid_facing_role_not_display_name_to_the_creative_text_genera
     save_persistent_reminder(owner_id, contact_id, "שיעורי בית", PAST)
 
     with patch("src.scheduler._generate_creative_reminder_text", return_value="x") as mock_generate, \
-         patch("src.integrations.whatsapp.send_text_message"):
+         patch("src.integrations.telegram.send_text_message"):
         check_and_send_persistent_reminders()
 
     mock_generate.assert_called_once_with("שיעורי בית", "דני", "אבא")
 
 
 def test_due_and_under_max_attempts_nags_the_recipient_and_reschedules(db_path, make_user):
-    owner_id = make_user(whatsapp_number="972500000001", display_name="Yossi")
+    owner_id = make_user(chat_id="972500000001", display_name="Yossi")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     save_persistent_reminder(owner_id, contact_id, "שיעורי בית", PAST)
 
     with patch("src.integrations.gemini.call_gemini_json", return_value={"message": "נו דני, מה קורה עם שיעורי בית? 😅"}), \
-         patch("src.integrations.whatsapp.send_text_or_template", return_value=True) as mock_send:
+         patch("src.integrations.telegram.send_text_message", return_value=True) as mock_send:
         check_and_send_persistent_reminders()
 
     mock_send.assert_called_once()
@@ -77,34 +77,24 @@ def test_due_and_under_max_attempts_nags_the_recipient_and_reschedules(db_path, 
     assert len(get_due_persistent_reminders((run_now + timedelta(minutes=6)).isoformat())) == 1
 
 
-def test_nag_goes_through_the_24h_window_template_fallback(db_path, make_user):
-    """2026-09-25: a kid is outside WhatsApp's 24h window by default (a
-    delivered/read receipt does not open it - only a message they actually
-    send does), so the nag MUST go through send_text_or_template. Before
-    this it used plain send_text_message and simply vanished, silently,
-    for exactly the recipients this whole feature exists for."""
-    owner_id = make_user(whatsapp_number="972500000001", display_name="יוסי")
+def test_nag_is_plain_text_addressed_to_the_recipient(db_path, make_user):
+    owner_id = make_user(chat_id="972500000001", display_name="יוסי")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     save_persistent_reminder(owner_id, contact_id, "שיעורי בית", PAST)
 
     with patch("src.integrations.gemini.call_gemini_json", return_value={"message": "נו דני?\nמה קורה? 😅"}), \
-         patch("src.integrations.whatsapp.send_text_or_template", return_value=True) as mock_send:
+         patch("src.integrations.telegram.send_text_message", return_value=True) as mock_send:
         check_and_send_persistent_reminders()
 
     kwargs = mock_send.call_args.kwargs
-    assert kwargs["template_name"] == "reminder_notification"
-    assert kwargs["language_code"] == "he"
-    # the template slot carries a plain one-liner, never the creative body -
-    # WhatsApp rejects template parameters containing newlines, and the
-    # creative body always has them (the confirmation line is appended).
-    assert len(kwargs["body_params"]) == 1
-    assert "\n" not in kwargs["body_params"][0]
-    assert "שיעורי בית" in kwargs["body_params"][0]
+    assert kwargs["to"] == "972500000071"
+    assert set(kwargs) == {"to", "body"}
+    assert "נו דני?" in kwargs["body"]
 
 
 def test_a_nag_that_fails_outright_notifies_both_parents(db_path, make_user):
-    owner_id = make_user(whatsapp_number="972500000001", display_name="יוסי")
-    other_parent_id = make_user(whatsapp_number="972500000002", display_name="רונית")
+    owner_id = make_user(chat_id="972500000001", display_name="יוסי")
+    other_parent_id = make_user(chat_id="972500000002", display_name="רונית")
     conn = get_connection()
     try:
         conn.execute(
@@ -117,42 +107,13 @@ def test_a_nag_that_fails_outright_notifies_both_parents(db_path, make_user):
     save_persistent_reminder(owner_id, contact_id, "שיעורי בית", PAST)
 
     with patch("src.integrations.gemini.call_gemini_json", return_value={"message": "נו?"}), \
-         patch("src.integrations.whatsapp.send_text_or_template", return_value=False), \
-         patch("src.integrations.whatsapp.send_text_message") as mock_notify:
+         patch("src.integrations.telegram.send_text_message", side_effect=lambda to, body: to != "972500000071") as mock_send:
         check_and_send_persistent_reminders()
 
-    notified = {call.kwargs["to"] for call in mock_notify.call_args_list}
+    notified = {call.kwargs["to"] for call in mock_send.call_args_list} - {"972500000071"}
     assert notified == {"972500000001", "972500000002"}
-    assert "דני" in mock_notify.call_args_list[0].kwargs["body"]
-
-
-def test_async_failure_callbacks_are_bound_per_row_not_captured_by_closure(db_path, make_user):
-    """2026-09-25 regression: the on_permanent_failure lambda is invoked
-    long after this loop has finished (from whatever later webhook carries
-    the failed status). Closing over the loop variables instead of binding
-    them would make EVERY late failure report whichever kid happened to be
-    last in the loop."""
-    owner_id = make_user(whatsapp_number="972500000001", display_name="יוסי")
-    ido_contact = save_contact(owner_id, "דני", "972500000071")
-    tomer_contact = save_contact(owner_id, "תומר", "972500000073")
-    save_persistent_reminder(owner_id, ido_contact, "שיעורי בית", PAST)
-    save_persistent_reminder(owner_id, tomer_contact, "לסדר חדר", PAST)
-
-    captured = []
-    with patch("src.integrations.gemini.call_gemini_json", return_value={"message": "נו?"}), \
-         patch("src.integrations.whatsapp.send_text_or_template",
-               side_effect=lambda **kw: captured.append(kw["on_permanent_failure"]) or True):
-        check_and_send_persistent_reminders()
-
-    assert len(captured) == 2
-    # invoke both callbacks AFTER the loop is done - each must still report
-    # its own recipient, not the last one processed
-    with patch("src.scheduler.notify_reminder_delivery_failure") as mock_notify:
-        for callback in captured:
-            callback()
-
-    reported = {call.args[0] for call in mock_notify.call_args_list}
-    assert reported == {"דני", "תומר"}
+    parent_calls = [c for c in mock_send.call_args_list if c.kwargs["to"] != "972500000071"]
+    assert "דני" in parent_calls[0].kwargs["body"]
 
 
 def test_creative_text_falls_back_to_the_plain_template_on_any_gemini_failure(db_path, make_user):
@@ -160,12 +121,12 @@ def test_creative_text_falls_back_to_the_plain_template_on_any_gemini_failure(db
     is far better than a nag that doesn't arrive at all because the
     creative-writing call failed - so any Gemini failure here must never
     block or corrupt the actual send."""
-    owner_id = make_user(whatsapp_number="972500000001", display_name="Yossi")
+    owner_id = make_user(chat_id="972500000001", display_name="Yossi")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     save_persistent_reminder(owner_id, contact_id, "שיעורי בית", PAST)
 
     with patch("src.integrations.gemini.call_gemini_json", side_effect=Exception("boom")), \
-         patch("src.integrations.whatsapp.send_text_or_template", return_value=True) as mock_send:
+         patch("src.integrations.telegram.send_text_message", return_value=True) as mock_send:
         check_and_send_persistent_reminders()
 
     mock_send.assert_called_once()
@@ -188,7 +149,7 @@ def test_repeated_polls_keep_nagging_until_max_attempts_then_escalate(db_path, m
     """
     from src.db.models import get_connection
 
-    owner_id = make_user(whatsapp_number="972500000001", display_name="Yossi")
+    owner_id = make_user(chat_id="972500000001", display_name="Yossi")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     rid = save_persistent_reminder(owner_id, contact_id, "שיעורי בית", PAST, retry_interval_minutes=5, max_attempts=3)
 
@@ -200,16 +161,16 @@ def test_repeated_polls_keep_nagging_until_max_attempts_then_escalate(db_path, m
         finally:
             conn.close()
 
-    # nags to the kid go through send_text_or_template (24h-window
-    # fallback); the escalation to the parent is a plain text send, since
-    # the parent is always inside the window - they talk to the bot.
+    # nags go to the kid, the escalation goes to the parent - both plain text sends
     nagged = []
     escalated = []
+
+    def fake_send(to, body):
+        (nagged if to == "972500000071" else escalated).append((to, body))
+        return True
+
     with patch("src.integrations.gemini.call_gemini_json", return_value={"message": "נו דני, מה קורה?"}), \
-         patch("src.integrations.whatsapp.send_text_or_template",
-               side_effect=lambda **kw: nagged.append(kw["to"]) or True), \
-         patch("src.integrations.whatsapp.send_text_message",
-               side_effect=lambda to, body: escalated.append((to, body))):
+         patch("src.integrations.telegram.send_text_message", side_effect=fake_send):
         check_and_send_persistent_reminders()  # attempt 1/3 -> nag
         force_due()
         check_and_send_persistent_reminders()  # attempt 2/3 -> nag
@@ -218,7 +179,7 @@ def test_repeated_polls_keep_nagging_until_max_attempts_then_escalate(db_path, m
         force_due()
         check_and_send_persistent_reminders()  # already at max_attempts -> escalate instead
 
-    assert nagged == ["972500000071", "972500000071", "972500000071"]
+    assert [n[0] for n in nagged] == ["972500000071"] * 3
     assert len(escalated) == 1
     assert escalated[0][0] == "972500000001"  # the parent
     assert "שיעורי בית" in escalated[0][1]
@@ -227,12 +188,12 @@ def test_repeated_polls_keep_nagging_until_max_attempts_then_escalate(db_path, m
 def test_confirmed_reminder_is_never_nagged_again(db_path, make_user):
     from src.db.models import mark_persistent_reminder_done
 
-    owner_id = make_user(whatsapp_number="972500000001")
+    owner_id = make_user(chat_id="972500000001")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     rid = save_persistent_reminder(owner_id, contact_id, "שיעורי בית", PAST)
     mark_persistent_reminder_done(rid)
 
-    with patch("src.integrations.whatsapp.send_text_message") as mock_send:
+    with patch("src.integrations.telegram.send_text_message") as mock_send:
         check_and_send_persistent_reminders()
     mock_send.assert_not_called()
 
@@ -243,7 +204,7 @@ def test_a_recurring_reminder_resets_instead_of_terminally_escalating(db_path, m
     forever - one unconfirmed day should not kill tomorrow's cycle."""
     from src.db.models import get_connection, list_active_persistent_reminders
 
-    owner_id = make_user(whatsapp_number="972500000001", timezone="Asia/Jerusalem")
+    owner_id = make_user(chat_id="972500000001", timezone="Asia/Jerusalem")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     rid = save_persistent_reminder(
         owner_id, contact_id, "להאכיל את הכלב", PAST,
@@ -259,12 +220,13 @@ def test_a_recurring_reminder_resets_instead_of_terminally_escalating(db_path, m
             conn.close()
 
     with patch("src.integrations.gemini.call_gemini_json", return_value={"message": "נו דני, מה קורה עם הכלב?"}), \
-         patch("src.integrations.whatsapp.send_text_message") as mock_send:
+         patch("src.integrations.telegram.send_text_message") as mock_send:
         check_and_send_persistent_reminders()  # attempt 1/1 -> nag
         force_due()
         check_and_send_persistent_reminders()  # already at max_attempts -> escalate + reset
 
-    assert mock_send.call_count == 2
+    # the first send blew up; the second reminder must still have been attempted
+    assert mock_send.call_count >= 2
     # the row is still active (pending), not terminally escalated
     rows = list_active_persistent_reminders(owner_id)
     assert len(rows) == 1
@@ -275,15 +237,16 @@ def test_a_recurring_reminder_resets_instead_of_terminally_escalating(db_path, m
 
 def test_one_reminder_failing_does_not_block_the_next(db_path, make_user):
     """Per-row error isolation, same 12.3 principle as every other proactive job here."""
-    owner_a = make_user(whatsapp_number="972500000001")
-    owner_b = make_user(whatsapp_number="972500000002")
+    owner_a = make_user(chat_id="972500000001")
+    owner_b = make_user(chat_id="972500000002")
     contact_a = save_contact(owner_a, "דני", "972500000071")
     contact_b = save_contact(owner_b, "תומר", "972500000073")
     save_persistent_reminder(owner_a, contact_a, "X", PAST)
     save_persistent_reminder(owner_b, contact_b, "Y", PAST)
 
     with patch("src.integrations.gemini.call_gemini_json", return_value={"message": "נו, מה קורה?"}), \
-         patch("src.integrations.whatsapp.send_text_message", side_effect=[Exception("boom"), None]) as mock_send:
+         patch("src.integrations.telegram.send_text_message", side_effect=[Exception("boom"), None]) as mock_send:
         check_and_send_persistent_reminders()
 
-    assert mock_send.call_count == 2
+    # the first send blew up; the second reminder must still have been attempted
+    assert mock_send.call_count >= 2

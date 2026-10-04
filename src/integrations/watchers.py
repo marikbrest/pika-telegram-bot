@@ -50,8 +50,8 @@ CHECKERS = {
     "web_page": check_web_page,
 }
 
-# No approved WhatsApp template exists yet for watch notifications, so these
-# go out as plain text (see src.integrations.whatsapp.send_text_message) -
+# No approved Telegram template exists yet for watch notifications, so these
+# go out as plain text (see src.integrations.telegram.send_text_message) -
 # same as the abandoned-package notice in scheduler.py, which is in the same
 # position (a message type with no matching template). If this needs to
 # reliably reach someone outside the 24h window, a template submission is

@@ -5,7 +5,7 @@ PRD.md section 5 - message flow.
 Returns a dict matching one of:
   {"intent": "reminder", "reminder": {..., "recipient_name": str|None}, "reply": "..."}
   {"intent": "chat", "reply": "<free-form reply>", "feature_request_offer": "<short English description of an unsupported capability the user asked for, only when the reply itself offers to notify the developer - see the chat schema block below> | None"}
-  {"intent": "add_contact", "contact": {"name": str, "whatsapp_number": str}, "reply": "..."}
+  {"intent": "add_contact", "contact": {"name": str, "chat_id": str}, "reply": "..."}
   {"intent": "connect_google", "reply": "..."}  <- request to connect Gmail/Calendar/Drive; the link itself is added by the code, not by Gemini
   {"intent": "calendar", "calendar": {"action": "query"|"create"|"update", ...}, "reply": "..."}  <- reply here is a placeholder only. The real answer is built in code after actually querying/writing the calendar; Gemini cannot see the calendar at classification time
   {"intent": "weather", "weather": {"location": str|None, "day_offset": int, "is_range": bool, "range_days": int|None}, "reply": "..."}  <- reply here is also a placeholder, for the same reason: Gemini does not know the real weather
@@ -14,7 +14,7 @@ Returns a dict matching one of:
   {"intent": "email_draft", "email_draft": {"to": str, "subject": str, "body": str}, "reply": "..."}  <- the bot proposes wording, it does NOT send. Here the reply IS the real content (the proposed draft), not a placeholder
   {"intent": "email_action", "email_action": {"action": "send"|"cancel"|"edit", "edit_instructions": str|None}, "reply": "..."}  <- only when a draft is pending (see the context block below)
   {"intent": "reminder_manage", "reminder_manage": {"action": "list"|"cancel"|"reschedule"|"snooze"|"edit_content", ...}, "reply": "..."}  <- placeholder reply; the real content is built in code
-  {"intent": "user_manage", "user_manage": {"action": "list"|"add"|"disable", "whatsapp_number": str|None, "display_name": str|None}, "reply": "..."}  <- manages bot access permissions. Placeholder reply; the code checks admin rights and performs the action
+  {"intent": "user_manage", "user_manage": {"action": "list"|"add"|"disable", "chat_id": str|None, "display_name": str|None}, "reply": "..."}  <- manages bot access permissions. Placeholder reply; the code checks admin rights and performs the action
   {"intent": "morning_brief", "reply": "..."}  <- an on-demand summary of calendar, weather and unread email. Placeholder reply; the code assembles it
   {"intent": "zabbix_status", "reply": "..."}  <- admin-only home-infra monitoring status (Zabbix). Placeholder reply; the code queries Zabbix for real
   {"intent": "saved_link", "saved_link": {"action": "save"|"list"|"forget", "url": str|None, "match": str|None}, "reply": "..."}  <- permanent copy of a shared URL, only when explicitly requested (never automatic, same principle as memory)
@@ -72,12 +72,12 @@ _RESPONSE_SCHEMA = """נתח את ההודעה וסווג אותה לאחת מ-2
 
 חשוב: הבוט כן יודע ליצור תמונה חדשה מתיאור וכן יודע לערוך תמונה שנשלחה אליו לאחרונה - אלה יכולות אמיתיות וקיימות, גם אם אינן מופיעות כקטגוריה נפרדת ברשימה למעלה. אם המשתמש שואל האם אתה יכול לצייר/ליצור/לעצב/לערוך תמונה, או מבקש זאת בלי לתאר מה בדיוק - ענה בחיוב (chat, בלי feature_request_offer) ובקש ממנו לתאר מה לצייר, או לשלוח את התמונה לעריכה אם מדובר בעריכה. לעולם אל תטען שאין לך את היכולת הזאת.
 
-3. אם זו בקשה להוסיף/לעדכן איש קשר (שם + מספר טלפון):
+3. אם זו בקשה להוסיף/לעדכן איש קשר (שם + מזהה צ'אט טלגרם):
 {{
   "intent": "add_contact",
   "contact": {{
     "name": "<שם איש הקשר, מתורגם/מומר לאנגלית (למשל 'אמא' -> 'Mom', 'אבא' -> 'Dad', שם פרטי -> תעתיק לאותיות לטיניות)>",
-    "whatsapp_number": "<מספר בפורמט בינלאומי, ספרות בלבד בלי +, למשל 972501234567. אם המשתמש נתן מספר ישראלי מקומי (05X-XXXXXXX) — המר אותו ל-972XXXXXXXXX>"
+    "chat_id": "<מזהה צ'אט טלגרם של איש הקשר: ספרות בלבד, למשל 123456789>"
   }},
   "reply": "<אישור קצר שאיש הקשר נשמר>"{transcript_field}
 }}
@@ -173,7 +173,7 @@ _RESPONSE_SCHEMA = """נתח את ההודעה וסווג אותה לאחת מ-2
   "intent": "user_manage",
   "user_manage": {{
     "action": "list" | "add" | "disable",
-    "whatsapp_number": "<ל-add/disable: מספר בפורמט בינלאומי, ספרות בלבד בלי +. אם המשתמש נתן מספר ישראלי מקומי (05X-XXXXXXX) המר ל-972XXXXXXXXX. ל-list: null>",
+    "chat_id": "<ל-add/disable: מזהה צ'אט טלגרם, ספרות בלבד. ל-list: null>",
     "display_name": "<רק ל-add: שם באנגלית. אם לא צוין שם, null>"
   }},
   "reply": "<הודעת ביניים קצרה — התוצאה האמיתית נבנית בקוד>"{transcript_field}
@@ -544,7 +544,7 @@ def _validate_result(result: dict | None) -> dict:
 
     if intent == "add_contact":
         contact = result.get("contact") or {}
-        if not {"name", "whatsapp_number"}.issubset(contact.keys()):
+        if not {"name", "chat_id"}.issubset(contact.keys()):
             return {"intent": "unclear", "reply": FALLBACK_REPLY}
 
     if intent == "calendar":
@@ -619,7 +619,7 @@ def _validate_result(result: dict | None) -> dict:
         action = user_manage.get("action")
         if action not in ("list", "add", "disable"):
             return {"intent": "unclear", "reply": FALLBACK_REPLY}
-        if action in ("add", "disable") and not user_manage.get("whatsapp_number"):
+        if action in ("add", "disable") and not user_manage.get("chat_id"):
             return {"intent": "unclear", "reply": FALLBACK_REPLY}
 
     if intent == "saved_link":

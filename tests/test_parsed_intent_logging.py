@@ -10,10 +10,10 @@ from src.db.models import get_connection, save_incoming_message
 
 def test_parsed_intent_is_stored(db_path, make_user):
     user_id = make_user()
-    save_incoming_message(user_id, "מה מזג האוויר", "wamid.1", "text", parsed_intent="weather")
+    save_incoming_message(user_id, "מה מזג האוויר", "msg.1", "text", parsed_intent="weather")
 
     conn = get_connection()
-    row = conn.execute("SELECT parsed_intent FROM messages WHERE whatsapp_message_id = ?", ("wamid.1",)).fetchone()
+    row = conn.execute("SELECT parsed_intent FROM messages WHERE incoming_message_id = ?", ("msg.1",)).fetchone()
     conn.close()
     assert row["parsed_intent"] == "weather"
 
@@ -24,9 +24,9 @@ def test_parsed_intent_omitted_stores_null(db_path, make_user):
     what a baseline-building pass needs to find 'not yet classified'
     messages."""
     user_id = make_user()
-    save_incoming_message(user_id, "hi", "wamid.2", "text")
+    save_incoming_message(user_id, "hi", "msg.2", "text")
 
     conn = get_connection()
-    row = conn.execute("SELECT parsed_intent FROM messages WHERE whatsapp_message_id = ?", ("wamid.2",)).fetchone()
+    row = conn.execute("SELECT parsed_intent FROM messages WHERE incoming_message_id = ?", ("msg.2",)).fetchone()
     conn.close()
     assert row["parsed_intent"] is None

@@ -1,9 +1,9 @@
 """
 Fully remove one user and everything stored about them.
 
-    python scripts/delete_user.py 972501234567 --dry-run     # show what would be deleted, change nothing
-    python scripts/delete_user.py 972501234567               # asks you to retype the number, then deletes
-    python scripts/delete_user.py 972501234567 --yes         # no prompt (scripts)
+    python scripts/delete_user.py 123456789 --dry-run     # show what would be deleted, change nothing
+    python scripts/delete_user.py 123456789               # asks you to retype the number, then deletes
+    python scripts/delete_user.py 123456789 --yes         # no prompt (scripts)
 
     --contacts       also remove this number from OTHER users' contact books (and the reminders addressed
                      to it) - for someone who asked to stop receiving reminders but was never a user
@@ -28,12 +28,12 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
-from src.db.models import get_connection, get_user_by_whatsapp_number, log_admin_action  # noqa: E402
+from src.db.models import get_connection, get_user_by_chat_id, log_admin_action  # noqa: E402
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Fully remove a user and their data.")
-    ap.add_argument("number", help="the user's WhatsApp number, digits only, e.g. 972501234567")
+    ap.add_argument("number", help="the user's Telegram chat id, digits only, e.g. 123456789")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     ap.add_argument("--contacts", action="store_true")
@@ -47,7 +47,7 @@ def main(argv=None) -> int:
 
     from src import user_deletion
 
-    user = get_user_by_whatsapp_number(args.number)
+    user = get_user_by_chat_id(args.number)
     if user is None:
         print(f"No user with number {args.number}.")
         return 1

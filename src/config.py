@@ -6,9 +6,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
-WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
-WHATSAPP_WEBHOOK_VERIFY_TOKEN = os.getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN")
+# Telegram Bot API token from @BotFather. TELEGRAM_MODE: "polling" (default, no public URL needed) or "webhook"
+# (needs PUBLIC_BASE_URL and TELEGRAM_WEBHOOK_SECRET). TELEGRAM_API_BASE only changes for a self-hosted Bot API server.
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_MODE = os.getenv("TELEGRAM_MODE", "polling").strip().lower()
+if TELEGRAM_MODE not in ("polling", "webhook"):
+    raise ValueError("TELEGRAM_MODE must be polling or webhook")
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
+TELEGRAM_API_BASE = os.getenv("TELEGRAM_API_BASE", "https://api.telegram.org").rstrip("/")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 # Optional second AI provider (see src/ai.py and docs/ADDING_A_PROVIDER.md). OPENAI_MODEL has NO default on
@@ -41,10 +46,7 @@ DB_PATH = os.getenv("DB_PATH", "./data/assistant.db")
 # someone asks for the weather without naming one.
 DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE", "Asia/Jerusalem")
 DEFAULT_LOCATION = os.getenv("DEFAULT_LOCATION", "Tel Aviv")
-# Language code your WhatsApp message templates were approved in (e.g. "he", "en", "en_US").
-WHATSAPP_TEMPLATE_LANGUAGE = os.getenv("WHATSAPP_TEMPLATE_LANGUAGE", "he")
-# Language of the messages the bot's own code composes ("he" or "en"); see src/i18n.py. Independent of the template
-# language above: set both when you switch (the templates must be approved in the language you send them in).
+# Language of the messages the bot's own code composes ("he" or "en"); see src/i18n.py.
 LOCALE = os.getenv("LOCALE", "he").strip().lower()
 if LOCALE not in ("he", "en"):
     raise ValueError("LOCALE must be he or en")
@@ -63,7 +65,6 @@ OPERATOR_NAME = os.getenv("OPERATOR_NAME", "").strip()
 # Public https address of this bot (no trailing slash), e.g. https://assistant.example.com. Used to link new users to
 # /privacy and /terms in the welcome message; leave empty to skip that message.
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
-WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET")
 TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
 ZABBIX_API_URL = os.getenv("ZABBIX_API_URL", "http://localhost:8081/api_jsonrpc.php")
 ZABBIX_API_TOKEN = os.getenv("ZABBIX_API_TOKEN")
@@ -83,5 +84,5 @@ GCP_BILLING_DATASET = os.getenv("GCP_BILLING_DATASET")
 # own), never to every admin the way e.g. google_token_health does -
 # explicitly a narrower audience than "every admin" on purpose, so a future
 # second admin doesn't start getting these too without being asked.
-OWNER_WHATSAPP_NUMBER = os.getenv("OWNER_WHATSAPP_NUMBER")
+OWNER_CHAT_ID = os.getenv("OWNER_CHAT_ID")
 COST_ALERT_BUDGET_USD = float(os.getenv("COST_ALERT_BUDGET_USD", "15"))

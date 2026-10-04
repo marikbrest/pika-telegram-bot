@@ -3,7 +3,7 @@ Read-only query against the Firewalla MSP API - box online state and active
 alarm count, for the same admin-only home-infra status query that already
 reports Zabbix problems and UniFi network status.
 
-Uses a dedicated "whatsapp-bot" MSP personal access token, same
+Uses a dedicated "pika-bot" MSP personal access token, same
 least-privilege reasoning as the Zabbix/UniFi tokens: if this key leaks,
 its blast radius is isolated and MSP's own audit trail shows which
 consumer made which call. Unlike those two, the Firewalla MSP API has no

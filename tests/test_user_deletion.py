@@ -27,7 +27,7 @@ def _populate_every_user_table(user_id, contact_owner_number_in_other_book=None)
     """One row in every table that points at users (plus the contact those rows can reference)."""
     conn = models.get_connection()
     try:
-        contact_id = _fill(conn, "contacts", {"owner_user_id": user_id, "whatsapp_number": "972500009999"})
+        contact_id = _fill(conn, "contacts", {"owner_user_id": user_id, "chat_id": "972500009999"})
         for table, col in user_deletion._tables_referencing(conn, "users"):
             if table == "contacts":
                 continue
@@ -59,8 +59,8 @@ def _rows_for(user_id):
 
 def test_every_table_that_points_at_users_is_emptied_and_the_other_user_is_untouched(make_user):
     """If a new table with a user foreign key is added and cannot be deleted, this fails."""
-    target = make_user(whatsapp_number="972500000011", display_name="Leaver")
-    other = make_user(whatsapp_number="972500000012", display_name="Stayer")
+    target = make_user(chat_id="972500000011", display_name="Leaver")
+    other = make_user(chat_id="972500000012", display_name="Stayer")
     _populate_every_user_table(target)
     _populate_every_user_table(other)
     assert _rows_for(target)  # the fixture really did fill tables
@@ -75,7 +75,7 @@ def test_every_table_that_points_at_users_is_emptied_and_the_other_user_is_untou
 
 
 def test_describe_changes_nothing_and_matches_what_delete_removes(make_user):
-    target = make_user(whatsapp_number="972500000011")
+    target = make_user(chat_id="972500000011")
     _populate_every_user_table(target)
 
     planned = user_deletion.describe(target)
@@ -86,12 +86,12 @@ def test_describe_changes_nothing_and_matches_what_delete_removes(make_user):
 
 
 def test_shadow_log_rows_are_removed_through_the_message_id(make_user):
-    target = make_user(whatsapp_number="972500000011")
+    target = make_user(chat_id="972500000011")
     conn = models.get_connection()
     try:
-        _fill(conn, "messages", {"user_id": target, "whatsapp_message_id": "wamid.GONE"})
-        _fill(conn, "intent_shadow_log", {"whatsapp_message_id": "wamid.GONE"})
-        _fill(conn, "intent_shadow_log", {"whatsapp_message_id": "wamid.KEEP"})
+        _fill(conn, "messages", {"user_id": target, "incoming_message_id": "msg.GONE"})
+        _fill(conn, "intent_shadow_log", {"incoming_message_id": "msg.GONE"})
+        _fill(conn, "intent_shadow_log", {"incoming_message_id": "msg.KEEP"})
         conn.commit()
     finally:
         conn.close()
@@ -100,14 +100,14 @@ def test_shadow_log_rows_are_removed_through_the_message_id(make_user):
 
     conn = models.get_connection()
     try:
-        ids = [r[0] for r in conn.execute("SELECT whatsapp_message_id FROM intent_shadow_log")]
+        ids = [r[0] for r in conn.execute("SELECT incoming_message_id FROM intent_shadow_log")]
     finally:
         conn.close()
-    assert ids == ["wamid.KEEP"]
+    assert ids == ["msg.KEEP"]
 
 
 def test_audit_log_is_kept_but_no_longer_points_at_the_user(make_user):
-    target = make_user(whatsapp_number="972500000011")
+    target = make_user(chat_id="972500000011")
     models.log_admin_action("admin@example.test", "view_user_reminders", target_user_id=target)
 
     user_deletion.delete_user(target)
@@ -121,12 +121,12 @@ def test_audit_log_is_kept_but_no_longer_points_at_the_user(make_user):
 
 
 def test_contacts_option_removes_the_number_from_other_users_books_and_their_reminders(make_user):
-    leaver = make_user(whatsapp_number="972500000011")
-    friend = make_user(whatsapp_number="972500000012")
+    leaver = make_user(chat_id="972500000011")
+    friend = make_user(chat_id="972500000012")
     conn = models.get_connection()
     try:
-        in_friends_book = _fill(conn, "contacts", {"owner_user_id": friend, "name": "Leaver", "whatsapp_number": "972500000011"})
-        other_contact = _fill(conn, "contacts", {"owner_user_id": friend, "name": "Other", "whatsapp_number": "972500000099"})
+        in_friends_book = _fill(conn, "contacts", {"owner_user_id": friend, "name": "Leaver", "chat_id": "972500000011"})
+        other_contact = _fill(conn, "contacts", {"owner_user_id": friend, "name": "Other", "chat_id": "972500000099"})
         _fill(conn, "reminders", {"user_id": friend, "recipient_contact_id": in_friends_book})
         _fill(conn, "reminders", {"user_id": friend, "recipient_contact_id": other_contact})
         conn.commit()
@@ -139,7 +139,7 @@ def test_contacts_option_removes_the_number_from_other_users_books_and_their_rem
 
     conn = models.get_connection()
     try:
-        numbers = [r[0] for r in conn.execute("SELECT whatsapp_number FROM contacts")]
+        numbers = [r[0] for r in conn.execute("SELECT chat_id FROM contacts")]
         remaining = conn.execute("SELECT COUNT(*) FROM reminders").fetchone()[0]
     finally:
         conn.close()
@@ -147,7 +147,7 @@ def test_contacts_option_removes_the_number_from_other_users_books_and_their_rem
 
 
 def test_a_failure_rolls_everything_back(make_user):
-    target = make_user(whatsapp_number="972500000011")
+    target = make_user(chat_id="972500000011")
     _populate_every_user_table(target)
     before = _rows_for(target)
 
@@ -178,34 +178,34 @@ def _cli(args, monkeypatch=None):
 
 
 def test_cli_dry_run_changes_nothing(make_user, capsys):
-    target = make_user(whatsapp_number="972500000011")
+    target = make_user(chat_id="972500000011")
     assert _cli(["972500000011", "--dry-run"]) == 0
     assert "dry run" in capsys.readouterr().out
-    assert models.get_user_by_whatsapp_number("972500000011") is not None
+    assert models.get_user_by_chat_id("972500000011") is not None
 
 
 def test_cli_refuses_to_delete_the_last_admin_without_force(make_user, capsys):
-    make_user(whatsapp_number="972500000011", is_admin=True)
+    make_user(chat_id="972500000011", is_admin=True)
     assert _cli(["972500000011", "--yes", "--keep-google"]) == 1
-    assert models.get_user_by_whatsapp_number("972500000011") is not None
+    assert models.get_user_by_chat_id("972500000011") is not None
     assert _cli(["972500000011", "--yes", "--keep-google", "--force"]) == 0
-    assert models.get_user_by_whatsapp_number("972500000011") is None
+    assert models.get_user_by_chat_id("972500000011") is None
 
 
 def test_cli_wrong_confirmation_deletes_nothing(make_user, monkeypatch):
-    make_user(whatsapp_number="972500000011")
+    make_user(chat_id="972500000011")
     monkeypatch.setattr("builtins.input", lambda *_: "nope")
     assert _cli(["972500000011", "--keep-google"]) == 1
-    assert models.get_user_by_whatsapp_number("972500000011") is not None
+    assert models.get_user_by_chat_id("972500000011") is not None
 
 
 def test_cli_revokes_google_then_deletes_and_records_an_audit_entry(make_user):
-    make_user(whatsapp_number="972500000099", is_admin=True)
-    make_user(whatsapp_number="972500000011")
+    make_user(chat_id="972500000099", is_admin=True)
+    make_user(chat_id="972500000011")
     with patch("src.integrations.google_oauth.revoke_google_tokens", return_value="revoked") as revoke:
         assert _cli(["972500000011", "--yes"]) == 0
     revoke.assert_called_once()
-    assert models.get_user_by_whatsapp_number("972500000011") is None
+    assert models.get_user_by_chat_id("972500000011") is None
     conn = models.get_connection()
     try:
         row = conn.execute("SELECT admin_email, action FROM admin_audit_log").fetchone()

@@ -147,7 +147,7 @@ def test_memory_action_specific_requirements(memory, should_pass):
     "user_manage,should_pass",
     [
         ({"action": "list"}, True),
-        ({"action": "add", "whatsapp_number": "972500000001"}, True),
+        ({"action": "add", "chat_id": "972500000001"}, True),
         ({"action": "add"}, False),  # granting bot access with no number is meaningless - refuse
         ({"action": "disable"}, False),
     ],

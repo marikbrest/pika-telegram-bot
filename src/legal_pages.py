@@ -48,11 +48,11 @@ def _openai_enabled() -> bool:
 def privacy_html() -> str:
     """English + Hebrew on one page (Google's consent screen takes a single URL)."""
     contact = _contact()
-    return _PAGE_HEAD.format(title="Privacy Policy - Personal WhatsApp Assistant") + f"""
+    return _PAGE_HEAD.format(title="Privacy Policy - Personal Telegram Assistant") + f"""
 <section id="en" dir="ltr">
 <h1>Privacy Policy</h1>
 <p><small>Last updated: {LEGAL_PAGES_UPDATED}</small></p>
-<p>This WhatsApp assistant is a private, invitation-only service. It is run by
+<p>This Telegram assistant is a private, invitation-only service. It is run by
 <b>{_operator("en")}</b> (the "operator"), who decides how your information is used and is
 responsible for it. Contact: {contact}. It is not a commercial or public service.</p>
 
@@ -63,7 +63,7 @@ assistant to remember - to understand and answer you.</li>
 <li><b>If you connect Google:</b> access to your Calendar, Gmail and Drive, used only for what you ask
 (for example "what's on my calendar", "summarize my latest emails", "save this to Drive") and, if you turn
 it on, for proactive alerts.</li>
-<li><b>Technical data:</b> your WhatsApp number and name, message times, and usage counts needed to run
+<li><b>Technical data:</b> your Telegram chat id and name, message times, and usage counts needed to run
 and pay for the service.</li>
 </ul>
 <p>You do not have to provide any of this; without it, the related feature simply will not work.</p>
@@ -76,7 +76,7 @@ mode (off by default) - email and calendar content. Web searches also go through
 {('<li><b>OpenAI</b>, if you choose it (say "switch to OpenAI"; it is off by default for you), receives the same kinds of content '
 'instead of Gemini for your conversations and your proactive alerts. Requests are sent with <code>store=false</code>, which is a request not to '
 'keep them, not a guarantee. Memory search and image generation always use Gemini. You can switch back at any time.</li>') if _openai_enabled() else ""}
-<li><b>Meta (WhatsApp Cloud API)</b> carries every message between you and the assistant.</li>
+<li><b>Telegram</b> (the Telegram Bot API) carries every message between you and the assistant.</li>
 <li><b>Other providers</b> receive only the minimum for a lookup you request: Ship24 (tracking numbers),
 Open-Meteo (city names, for weather), Yahoo Finance (ticker symbols).</li>
 </ul>
@@ -138,7 +138,7 @@ the parent or guardian may exercise the rights above on the child's behalf.</p>
 <section id="he" dir="rtl" lang="he">
 <h1>מדיניות פרטיות</h1>
 <p><small>עודכן לאחרונה: {LEGAL_PAGES_UPDATED}</small></p>
-<p>עוזר הוואטסאפ הזה הוא שירות פרטי בהזמנה בלבד. הוא מופעל על ידי <b>{_operator("he")}</b>
+<p>עוזר הטלגרם הזה הוא שירות פרטי בהזמנה בלבד. הוא מופעל על ידי <b>{_operator("he")}</b>
 ("המפעיל"), שמחליט כיצד המידע שלכם משמש ואחראי לו. ליצירת קשר: {contact}. זה אינו שירות מסחרי או ציבורי.</p>
 
 <h2>איזה מידע נאסף ולמה</h2>
@@ -147,7 +147,7 @@ the parent or guardian may exercise the rights above on the child's behalf.</p>
 מהעוזר לזכור - כדי להבין אתכם ולענות.</li>
 <li><b>אם חיברתם את Google:</b> גישה ליומן, ל-Gmail ולדרייב, לשימוש רק במה שביקשתם (למשל "מה יש לי
 ביומן", "תסכם לי את המיילים האחרונים", "תשמור את זה בדרייב"), ואם הפעלתם - גם להתראות יזומות.</li>
-<li><b>מידע טכני:</b> מספר הוואטסאפ והשם שלכם, זמני הודעות ונתוני שימוש הדרושים להפעלת השירות ולתשלום עליו.</li>
+<li><b>מידע טכני:</b> מזהה הצ'אט בטלגרם והשם שלכם, זמני הודעות ונתוני שימוש הדרושים להפעלת השירות ולתשלום עליו.</li>
 </ul>
 <p>אין חובה למסור את המידע הזה; בלעדיו, היכולת הקשורה בו פשוט לא תעבוד.</p>
 
@@ -159,7 +159,7 @@ the parent or guardian may exercise the rights above on the child's behalf.</p>
 {('<li><b>OpenAI</b>, אם תבחרו בו (כותבים "עבור ל-OpenAI"; כברירת מחדל הוא כבוי אצלכם), מקבל את אותם סוגי תוכן במקום Gemini '
 'עבור השיחות שלכם וההתראות היזומות. הבקשות נשלחות עם <code>store=false</code>, שהוא בקשה לא לשמור אותן ולא הבטחה. '
 'חיפוש בזיכרון ויצירת תמונות תמיד משתמשים ב-Gemini. אפשר לחזור ל-Gemini בכל עת.</li>') if _openai_enabled() else ""}
-<li><b>מטא (WhatsApp Cloud API)</b> מעבירה כל הודעה בינכם לבין העוזר.</li>
+<li><b>טלגרם</b> (Telegram Bot API) מעבירה כל הודעה בינכם לבין העוזר.</li>
 <li><b>ספקים נוספים</b> מקבלים רק את המינימום לבדיקה שביקשתם: Ship24 (מספרי מעקב), Open-Meteo
 (שמות ערים, למזג אוויר), Yahoo Finance (סימולי מניות).</li>
 </ul>
@@ -218,7 +218,7 @@ the parent or guardian may exercise the rights above on the child's behalf.</p>
 
 def terms_html() -> str:
     contact = _contact()
-    return _PAGE_HEAD.format(title="Terms of Use - Personal WhatsApp Assistant") + f"""
+    return _PAGE_HEAD.format(title="Terms of Use - Personal Telegram Assistant") + f"""
 <section id="en" dir="ltr">
 <h1>Terms of Use</h1>
 <p><small>Last updated: {LEGAL_PAGES_UPDATED}</small></p>
@@ -227,7 +227,7 @@ def terms_html() -> str:
 <ol>
 <li><b>Personal use.</b> Use it for your own personal or family needs. Do not use it for anything unlawful,
 to harass anyone, to send messages people did not agree to receive, or to try to break or misuse it.
-You must also follow WhatsApp's and Google's own terms.</li>
+You must also follow Telegram's and Google's own terms.</li>
 <li><b>AI can be wrong.</b> Answers, summaries, search results, reminders and drafts are produced by an AI model
 and may be incomplete, outdated or wrong. Check anything important - dates, times, amounts, addresses,
 recipients - before relying on it. Nothing the assistant says is medical, legal, financial or other
@@ -235,7 +235,7 @@ professional advice.</li>
 <li><b>You approve actions.</b> The assistant asks for your confirmation before sending an email or creating a
 calendar event. Read what you approve; you are responsible for it.</li>
 <li><b>Not for emergencies.</b> Reminders and alerts may be late or not delivered at all (for example if a
-server, WhatsApp or Google is unavailable). Do not rely on the assistant for emergencies, medication, or
+server, Telegram or Google is unavailable). Do not rely on the assistant for emergencies, medication, or
 anything where a missed message could cause harm.</li>
 <li><b>No guarantee.</b> The service is provided free of charge, "as is" and "as available", without any warranty.
 To the extent permitted by law, the operator is not liable for indirect or consequential damage, or for loss
@@ -258,13 +258,13 @@ change applies. If you keep using the assistant after that, the updated terms ap
 <ol>
 <li><b>שימוש אישי.</b> השתמשו בו לצרכים האישיים או המשפחתיים שלכם. אין להשתמש בו לשום דבר בלתי חוקי,
 להטרדה, לשליחת הודעות למי שלא הסכים לקבל אותן, או לניסיון לשבש אותו או לנצל אותו לרעה. יש לפעול
-גם לפי תנאי השימוש של וואטסאפ ושל Google.</li>
+גם לפי תנאי השימוש של טלגרם ושל Google.</li>
 <li><b>בינה מלאכותית יכולה לטעות.</b> תשובות, סיכומים, תוצאות חיפוש, תזכורות וטיוטות נוצרים על ידי מודל
 בינה מלאכותית ועלולים להיות חלקיים, לא עדכניים או שגויים. בדקו כל דבר חשוב - תאריכים, שעות, סכומים,
 כתובות, נמענים - לפני שאתם סומכים עליו. שום דבר שהעוזר אומר אינו ייעוץ רפואי, משפטי, פיננסי או מקצועי אחר.</li>
 <li><b>אתם מאשרים את הפעולות.</b> העוזר מבקש את אישורכם לפני שליחת מייל או יצירת אירוע ביומן. קראו את
 מה שאתם מאשרים; האחריות עליו היא שלכם.</li>
-<li><b>לא למקרי חירום.</b> תזכורות והתראות עלולות להתעכב או לא להגיע כלל (למשל אם השרת, וואטסאפ או Google
+<li><b>לא למקרי חירום.</b> תזכורות והתראות עלולות להתעכב או לא להגיע כלל (למשל אם השרת, טלגרם או Google
 אינם זמינים). אל תסתמכו על העוזר במקרי חירום, לתרופות, או בכל מצב שבו הודעה שלא הגיעה עלולה לגרום נזק.</li>
 <li><b>ללא אחריות.</b> השירות ניתן ללא תשלום, "כמות שהוא" ("as is") ו"לפי זמינות", ללא כל התחייבות. במידה
 שהחוק מתיר, המפעיל אינו אחראי לנזק עקיף או תוצאתי, או להפסד שנגרם מהודעות שלא הגיעו, שהתעכבו או

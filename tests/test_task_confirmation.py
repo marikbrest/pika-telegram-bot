@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from src.db.models import get_due_persistent_reminders, save_contact, save_persistent_reminder
 from src.webhook_handler import _check_task_confirmation
 
-from .conftest import post_webhook, whatsapp_text_payload
+from .conftest import post_update, telegram_text_update
 
 NOW = datetime.now(ZoneInfo("UTC"))
 
@@ -23,7 +23,7 @@ PENDING = {
     "content": "שיעורי בית",
     "owner_user_id": 1,
     "recipient_name": "דני",
-    "owner_whatsapp_number": "972500000001",
+    "owner_chat_id": "972500000001",
     "owner_display_name": "Yossi",
     "schedule_type": "once",
     "schedule_time": None,
@@ -33,7 +33,7 @@ PENDING = {
 
 
 def test_confirmed_marks_done_and_notifies_owner(db_path, make_user):
-    owner_id = make_user(whatsapp_number="972500000001")
+    owner_id = make_user(chat_id="972500000001")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     rid = save_persistent_reminder(owner_id, contact_id, "שיעורי בית", NOW)
     pending = {**PENDING, "id": rid, "owner_user_id": owner_id}
@@ -59,7 +59,7 @@ def test_confirming_a_recurring_reminder_resets_it_for_the_next_occurrence(db_pa
     """A daily/weekly persistent reminder must NOT terminally resolve on
     confirmation - it resets (attempts_sent back to 0, next_trigger_at
     pushed to the next occurrence) so tomorrow's cycle still happens."""
-    owner_id = make_user(whatsapp_number="972500000001", timezone="Asia/Jerusalem")
+    owner_id = make_user(chat_id="972500000001", timezone="Asia/Jerusalem")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     rid = save_persistent_reminder(
         owner_id, contact_id, "להאכיל את הכלב", NOW,
@@ -108,15 +108,15 @@ def test_a_confirming_message_skips_the_normal_cutover_entirely(client, make_use
     pending nag and their message confirms it, the normal tools cutover
     must never even run - the confirmation short-circuits everything else,
     same as a forwarded-message suggestion does."""
-    owner_id = make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000071", display_name="דני")
+    owner_id = make_user(chat_id="972500000001")
+    make_user(chat_id="972500000071", display_name="דני")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     save_persistent_reminder(owner_id, contact_id, "שיעורי בית", NOW)
 
     with patch("src.webhook_handler.call_gemini_json", return_value={"confirmed": True}), \
          patch("src.webhook_handler._classify_text_with_cutover") as mock_cutover, \
          patch("src.webhook_handler.send_text_message", return_value=True) as mock_send:
-        post_webhook(client, whatsapp_text_payload("972500000071", "עשיתי"))
+        post_update(client, telegram_text_update("972500000071", "עשיתי"))
 
     mock_cutover.assert_not_called()
     # two sends: the owner notification, and the reply to the kid
@@ -127,13 +127,13 @@ def test_a_message_from_a_kid_with_nothing_pending_uses_the_normal_cutover(clien
     """Regression guard: a kid with NO pending nag must be completely
     unaffected - the confirmation check must not even attempt a Gemini call
     when there's nothing to check against."""
-    make_user(whatsapp_number="972500000071", display_name="דני")
+    make_user(chat_id="972500000071", display_name="דני")
     fake_result = {"intent": "chat", "reply": "hi"}
 
     with patch("src.webhook_handler._check_task_confirmation") as mock_check, \
          patch("src.webhook_handler._classify_text_with_cutover", return_value=fake_result), \
          patch("src.webhook_handler.send_text_message", return_value=True):
-        post_webhook(client, whatsapp_text_payload("972500000071", "מה קורה"))
+        post_update(client, telegram_text_update("972500000071", "מה קורה"))
 
     mock_check.assert_not_called()
 
@@ -142,8 +142,8 @@ def test_an_unconfirmed_message_falls_through_to_the_normal_cutover(client, make
     """A pending nag exists, but the message doesn't confirm it (e.g. an
     unrelated question) - normal processing still happens, and the pending
     reminder is untouched (still due on its own schedule)."""
-    owner_id = make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000071", display_name="דני")
+    owner_id = make_user(chat_id="972500000001")
+    make_user(chat_id="972500000071", display_name="דני")
     contact_id = save_contact(owner_id, "דני", "972500000071")
     save_persistent_reminder(owner_id, contact_id, "שיעורי בית", NOW)
     fake_result = {"intent": "chat", "reply": "מה קורה?"}
@@ -151,7 +151,7 @@ def test_an_unconfirmed_message_falls_through_to_the_normal_cutover(client, make
     with patch("src.webhook_handler.call_gemini_json", return_value={"confirmed": False}), \
          patch("src.webhook_handler._classify_text_with_cutover", return_value=fake_result) as mock_cutover, \
          patch("src.webhook_handler.send_text_message", return_value=True):
-        post_webhook(client, whatsapp_text_payload("972500000071", "מה השעה?"))
+        post_update(client, telegram_text_update("972500000071", "מה השעה?"))
 
     mock_cutover.assert_called_once()
     # the reminder is still pending - untouched

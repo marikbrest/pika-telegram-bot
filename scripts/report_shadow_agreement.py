@@ -39,7 +39,7 @@ MIGRATED_INTENT_TO_TOOL = {
 
 conn = get_connection()
 rows = conn.execute(
-    "SELECT whatsapp_message_id, raw_content, old_intent, new_tool, new_args, error, created_at "
+    "SELECT incoming_message_id, raw_content, old_intent, new_tool, new_args, error, created_at "
     "FROM intent_shadow_log ORDER BY id"
 ).fetchall()
 conn.close()

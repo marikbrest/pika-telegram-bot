@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from src.db.models import get_user_by_id
 from src.i18n import t
 from src.integrations.google_oauth import decode_state, exchange_code_for_tokens, save_tokens
-from src.integrations.whatsapp import send_text_message
+from src.integrations.telegram import send_text_message
 
 router = APIRouter()
 
@@ -48,7 +48,7 @@ async def oauth_callback(request: Request):
         if user_id:
             user = get_user_by_id(user_id)
             if user:
-                send_text_message(to=user["whatsapp_number"], body=t("oauth.cancelled_message"))
+                send_text_message(to=user["chat_id"], body=t("oauth.cancelled_message"))
         return HTMLResponse(_error_page(t("oauth.cancelled_page")), status_code=400)
 
     if user_id is None:
@@ -68,8 +68,8 @@ async def oauth_callback(request: Request):
         save_tokens(user_id, credentials)
     except Exception as e:
         print(f"[oauth] token exchange failed for user_id={user_id}: {e}")
-        send_text_message(to=user["whatsapp_number"], body=t("oauth.failed_message"))
+        send_text_message(to=user["chat_id"], body=t("oauth.failed_message"))
         return HTMLResponse(_error_page(t("oauth.technical_error")), status_code=500)
 
-    send_text_message(to=user["whatsapp_number"], body=t("oauth.connected_message"))
+    send_text_message(to=user["chat_id"], body=t("oauth.connected_message"))
     return HTMLResponse(_success_page())

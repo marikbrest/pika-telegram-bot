@@ -1,11 +1,11 @@
 """
-Talk to Pika from your terminal - no WhatsApp, Meta or public URL needed.
+Talk to Pika from your terminal - no Telegram account, bot token or public URL needed.
 
 Only a Gemini key is required (GEMINI_API_KEY in .env or the environment):
 
     python scripts/chat.py
 
-It feeds your lines through the *same* message pipeline the WhatsApp webhook uses and
+It feeds your lines through the *same* message pipeline the Telegram webhook uses and
 prints what the bot would have sent. Replies, reactions and generated images are
 captured locally (images are saved under the sandbox folder). Google-backed features
 (Calendar/Gmail/Drive) need a real OAuth setup and will say "not connected" here.
@@ -54,16 +54,13 @@ if not os.environ.get("GEMINI_API_KEY"):
 OUT_DIR = os.path.join(os.path.dirname(SANDBOX_DB), "sandbox_images")
 
 
-def _install_fake_whatsapp():
-    """Replace every outbound WhatsApp call with a local printer, before anything imports them."""
-    import src.integrations.whatsapp as wa
+def _install_fake_telegram():
+    """Replace every outbound Telegram call with a local printer, before anything imports them."""
+    import src.integrations.telegram as wa
 
     def send_text_message(to, body):
         print(f"\npika> {body}\n")
         return True
-
-    def send_text_or_template(to, body, template_name=None, language_code=None, body_params=None, on_permanent_failure=None):
-        return send_text_message(to, body)
 
     def send_reaction(to, message_id, emoji):
         print(f"      [reacted {emoji}]")
@@ -79,20 +76,19 @@ def _install_fake_whatsapp():
         return True
 
     wa.send_text_message = send_text_message
-    wa.send_text_or_template = send_text_or_template
     wa.send_reaction = send_reaction
     wa.send_image_bytes = send_image_bytes
 
 
 def main() -> int:
-    _install_fake_whatsapp()
+    _install_fake_telegram()
     from src.db.models import admin_add_user, get_connection, init_db
 
     init_db()
     admin_add_user(SANDBOX_NUMBER, "You")
     conn = get_connection()
     try:
-        conn.execute("UPDATE users SET is_admin = 1, is_active = 1 WHERE whatsapp_number = ?", (SANDBOX_NUMBER,))
+        conn.execute("UPDATE users SET is_admin = 1, is_active = 1 WHERE chat_id = ?", (SANDBOX_NUMBER,))
         conn.commit()
     finally:
         conn.close()

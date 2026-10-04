@@ -65,7 +65,7 @@ def test_edit_image_is_offered_and_context_is_prepended_when_a_photo_is_pending(
 # ===== send_feature_request_to_developer via confirm_suggestion =====
 
 def test_confirming_a_feature_request_suggestion_dispatches_send_feature_request(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי", is_admin=True)
+    make_user(chat_id="972500000001", display_name="יוסי", is_admin=True)
     save_pending_suggestion(
         1, "send_feature_request_to_developer",
         json.dumps({"request_text": "voice replies"}),
@@ -83,7 +83,7 @@ def test_confirming_a_feature_request_suggestion_dispatches_send_feature_request
 
 
 def test_dismissing_a_feature_request_suggestion_sends_nothing(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי", is_admin=True)
+    make_user(chat_id="972500000001", display_name="יוסי", is_admin=True)
     save_pending_suggestion(
         1, "send_feature_request_to_developer",
         json.dumps({"request_text": "voice replies"}),

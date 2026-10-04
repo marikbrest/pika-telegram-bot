@@ -1,3 +1,7 @@
+> **Historical design document.** It was written for the WhatsApp edition of Pika; the Telegram edition keeps the same architecture
+> but replaces the channel (see `docs/SETUP_TELEGRAM.md` and the CHANGELOG). WhatsApp-specific sections (templates, 24-hour window, Meta
+> signatures) no longer apply.
+
 # PRD — WhatsApp Personal Assistant (working name: "Assistant")
 
 **Status:** Draft v1
@@ -111,7 +115,7 @@ Meta WhatsApp Cloud API ── webhook ──▶ Cloudflare Tunnel ──▶ loc
 -- Users
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    whatsapp_number TEXT UNIQUE NOT NULL,
+    chat_id TEXT UNIQUE NOT NULL,
     display_name TEXT,
     timezone TEXT DEFAULT 'Asia/Jerusalem',
     preferred_tone TEXT DEFAULT 'neutral',
@@ -138,7 +142,7 @@ CREATE TABLE messages (
     message_type TEXT NOT NULL,         -- 'text' | 'audio'
     raw_content TEXT,                   -- original text / transcription
     parsed_intent TEXT,                 -- JSON from Gemini
-    whatsapp_message_id TEXT UNIQUE,
+    incoming_message_id TEXT UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -381,8 +385,8 @@ Meta may deliver the same webhook more than once (this is documented, standard b
 on their side, not a fault). Without protection this creates duplicate messages and
 reminders.
 
-- Add a `UNIQUE` constraint on `whatsapp_message_id` in the `messages` table.
-- In `webhook_handler`: before INSERT, check whether `whatsapp_message_id` already
+- Add a `UNIQUE` constraint on `incoming_message_id` in the `messages` table.
+- In `webhook_handler`: before INSERT, check whether `incoming_message_id` already
   exists → if so, return `200 OK` (mandatory, otherwise Meta keeps retrying) and do not
   process the message again.
 

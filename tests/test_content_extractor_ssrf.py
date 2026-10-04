@@ -2,7 +2,7 @@
 Regression tests for the SSRF fix in content_extractor.py (2026-09-13):
 saved links can be any URL a user sends, fetched from inside the home
 network, so an unguarded fetch could reach Zabbix/UniFi/anything else on the
-LAN and read results back over WhatsApp.
+LAN and read results back over Telegram.
 """
 import httpx
 import pytest

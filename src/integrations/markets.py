@@ -10,7 +10,7 @@ Alpha Vantage, which requires an API key).
 """
 import httpx
 
-# Global client with connection pooling - same lesson as whatsapp.py/weather.py
+# Global client with connection pooling - same lesson as telegram.py/weather.py
 _client = httpx.Client(
     timeout=10.0,
     limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=120.0),

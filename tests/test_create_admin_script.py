@@ -3,7 +3,7 @@ import importlib.util
 import pathlib
 import sys
 
-from src.db.models import get_user_by_whatsapp_number
+from src.db.models import get_user_by_chat_id
 
 _PATH = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "create_admin.py"
 
@@ -18,15 +18,15 @@ def _run(monkeypatch, *args):
 
 def test_creates_a_new_admin(db_path, monkeypatch):
     assert _run(monkeypatch, "972500000001", "Admin One") == 0
-    user = get_user_by_whatsapp_number("972500000001")
+    user = get_user_by_chat_id("972500000001")
     assert user["is_admin"] == 1 and user["is_active"] == 1
 
 
 def test_promotes_an_existing_user_and_is_idempotent(db_path, make_user, monkeypatch):
-    make_user(whatsapp_number="972500000002", display_name="Existing")
+    make_user(chat_id="972500000002", display_name="Existing")
     assert _run(monkeypatch, "972500000002", "Existing") == 0
     assert _run(monkeypatch, "972500000002", "Existing") == 0
-    assert get_user_by_whatsapp_number("972500000002")["is_admin"] == 1
+    assert get_user_by_chat_id("972500000002")["is_admin"] == 1
 
 
 def test_rejects_a_non_numeric_number(db_path, monkeypatch, capsys):

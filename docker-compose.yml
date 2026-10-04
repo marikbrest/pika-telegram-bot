@@ -1,7 +1,7 @@
 # Quick start:
 #   cp .env.example .env        # fill it in
 #   docker compose up -d --build
-#   docker compose run --rm bot python scripts/create_admin.py 972501234567 "Your Name"
+#   docker compose run --rm bot python scripts/create_admin.py 123456789 "Your Name"
 #
 # Optional public HTTPS via a Cloudflare Tunnel (set CLOUDFLARE_TUNNEL_TOKEN in .env):
 #   docker compose --profile tunnel up -d

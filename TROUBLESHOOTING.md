@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with `python scripts/doctor.py --online --url https://<your-domain>` — it checks most of
+Start with `python scripts/doctor.py --online` — it checks most of
 what is below and names the failing item. Logs: `docker compose logs -f bot`, or
 `logs/uvicorn.log` on Windows.
 
@@ -8,30 +8,24 @@ what is below and names the failing item. Logs: `docker compose logs -f bot`, or
 
 | Symptom / log line | Cause | Fix |
 | --- | --- | --- |
-| Nothing in the log at all when you message it | Meta isn't calling your webhook | Webhook not verified/subscribed: finish [step 4 of the Meta guide](./docs/SETUP_META.md#4-register-the-webhook) and subscribe to `messages`; check the tunnel is up |
-| `message from unknown number (...) - ignoring` | You are not a user — unknown numbers are ignored on purpose | `python scripts/create_admin.py <number> "<name>"` (digits only, international format, no `+`) |
-| `403` on `POST /webhook` | Signature check failed | `WHATSAPP_APP_SECRET` is missing or is not *this* app's secret |
-| Replies stop ~24h after you set up | Meta's temporary access token expired | Create a permanent System User token ([guide, step 6](./docs/SETUP_META.md#6-going-to-production)) |
-| Webhook "Verify and save" fails in Meta | Verify token mismatch, or the bot isn't reachable | `python scripts/doctor.py --url https://<your-domain>` shows which; restart the bot after editing `.env` |
-| 502 for ~30s after a restart | The tunnel is re-establishing | Wait; it is normal |
+| Nothing in the log at all when you message it | The bot is not receiving updates | Polling mode: check `[telegram] long polling started` appears at startup and the token is right (`doctor.py --online`). Webhook mode: `PUBLIC_BASE_URL` must be https and reachable, and `TELEGRAM_WEBHOOK_SECRET` set |
+| `message from unknown chat (...) - ignoring` | You are not a user — unknown chats are ignored on purpose | Send `/id` to the bot to see your chat id, then `python scripts/create_admin.py <chat id> "<name>"` |
+| `403` on `POST /telegram/webhook` | The secret header did not match | `TELEGRAM_WEBHOOK_SECRET` differs from the one registered; restart the bot so it re-registers the webhook |
+| `getUpdates failed (409)` | A webhook is registered, or a second copy is polling | Run a single instance; polling mode deletes a stale webhook at startup |
+| `getUpdates failed (401)` | Wrong or revoked bot token | Copy the token again from @BotFather |
+| 502 for ~30s after a restart (webhook mode) | The tunnel is re-establishing | Wait; it is normal |
 | Works, then stops after the machine sleeps | The host suspended the process | Disable sleep on the host (Windows: Settings → Power) |
 | `another instance already holds the single-instance lock` | A second copy is already running (the bot refuses to start twice on purpose) | Stop the old process (`docker compose down`, or `scripts/stop_assistant.ps1` on Windows) |
 
 ## Messages to family/contacts or alerts never arrive
 
-WhatsApp only lets a business message someone **first** inside a 24-hour window after *their*
-last message to you. Outside it, only an approved **template** is delivered.
+A Telegram bot can only message people who pressed **Start** in the bot, and not people who blocked it.
 
-- Log shows `delivery FAILED ... 131047` ("Re-engagement message") → no approved template covers
-  that message, or the recipient hasn't messaged the bot in 24h. Create the four templates in the
-  [main README](./README.md#whatsapp-message-templates) and wait for approval.
-- A "successful" send that never arrives can be reported *later* by a status webhook — look for
-  `status update for ...: failed` lines. The bot retries via template automatically when it can.
-- Meta may re-categorise a template from *Utility* to *Marketing* after approving it (higher cost).
-  Keep the wording plainly transactional; if it happens anyway, appeal in **Business Support Home →
-  Template category updates → Request review** (you have 60 days). Sending works either way.
-- While your WhatsApp app is in development mode, you can only message numbers on the **API Setup →
-  To** list.
+- Log shows `sendMessage failed (403)` "bot was blocked by the user" or "can't initiate conversation" → the
+  recipient has to open the bot and press Start. The bot tells you when a reminder to someone could not be delivered.
+- Log shows `sendMessage failed (400)` "chat not found" → the stored chat id is wrong; check it with the person
+  (`/id` in the bot shows the right one).
+- `429` → Telegram rate limit; the bot waits for `retry_after` and retries automatically.
 
 ## Google (Calendar / Gmail / Drive)
 
@@ -56,7 +50,7 @@ Check in this order — each one silently produces "nothing" rather than an erro
 3. **Quiet hours** (default 22:30–07:00), a **"busy until..." status**, or the **daily cap** (default 6)
    are holding messages. Quiet-hours/busy messages are delivered later as a digest; cap-blocked ones
    are dropped by design.
-4. Outside the 24h window, delivery needs the `proactive_update` template approved (above).
+4. The recipient must have pressed Start in the bot (above).
 5. The model can decide something isn't worth interrupting you for — that is the point of the feature.
 
 ## Admin dashboard

@@ -7,7 +7,7 @@ from datetime import datetime
 
 import httpx
 
-# Global client with connection pooling - same lesson as whatsapp.py: the
+# Global client with connection pooling - same lesson as telegram.py: the
 # module-level httpx.get() helper opens a new TCP+TLS connection every call.
 _client = httpx.Client(timeout=10.0, limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=120.0))
 
@@ -74,7 +74,7 @@ def get_current_weather(location: str) -> dict:
 def get_daily_forecast(location: str, num_days: int) -> dict:
     """
     Returns the daily forecast for a given city, num_days ahead including today
-    (index 0). Open-Meteo supports up to 16 days; we cap at 7 to keep WhatsApp
+    (index 0). Open-Meteo supports up to 16 days; we cap at 7 to keep Telegram
     replies short and focused.
     Raises LocationNotFoundError if the city was not found.
 

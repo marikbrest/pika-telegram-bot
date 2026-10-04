@@ -1,16 +1,13 @@
 """
-WhatsApp Cloud API webhook handler.
+The message pipeline: one inbound message in the bot's internal shape (see src/telegram_handler.py) in, a reply out.
 Phase 1, step 3: support for text and voice messages (PRD sections 5 and 11).
 
 Implemented from the very first commit (not deferred to "later"):
-- 14.1 - verify the X-Hub-Signature-256 signature before any processing
-- 14.2 - allowlist: an unknown number is silently ignored, with no Gemini call (and no media download)
-- 12.1 - idempotency: a duplicate message from Meta is not processed twice
+- allowlist: an unknown chat is ignored, with no model call (and no media download) - enforced in telegram_handler
+- 12.1 - idempotency: a duplicate update from Telegram is not processed twice
 - 12.3 - unexpected failures never fail silently; the user gets a generic error message
 """
 import difflib
-import hashlib
-import hmac
 import json
 import threading
 import time
@@ -22,10 +19,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Header, Query, Request, Response
-
 from src.ai import current_provider, provider_command, unavailable_reply, use_provider, use_user
-from src.config import DEFAULT_TIMEZONE, DEFAULT_LOCATION, WHATSAPP_APP_SECRET, WHATSAPP_WEBHOOK_VERIFY_TOKEN
+from src.config import DEFAULT_TIMEZONE, DEFAULT_LOCATION
 from src.db.models import (
     MAX_ACTIVE_PERSISTENT_REMINDERS_PER_USER,
     MAX_FACTS_PER_USER,
@@ -42,7 +37,7 @@ from src.db.models import (
     deactivate_watch,
     delete_all_user_facts,
     delete_kid_schedule_day,
-    find_kid_schedule_owner_by_whatsapp_number,
+    find_kid_schedule_owner_by_chat_id,
     delete_saved_link,
     delete_user_fact,
     find_persistent_reminder_by_match,
@@ -64,7 +59,7 @@ from src.db.models import (
     get_pending_image_upload,
     get_pending_suggestion,
     get_recent_messages,
-    get_user_by_whatsapp_number,
+    get_user_by_chat_id,
     list_active_persistent_reminders,
     list_active_reminders,
     list_active_watches,
@@ -95,9 +90,8 @@ from src.db.models import (
     update_suggestion_status,
     upsert_kid_schedule_day,
 )
-from src.integrations.whatsapp import (
+from src.integrations.telegram import (
     download_media,
-    handle_delivery_status,
     send_image_bytes,
     send_reaction,
     send_text_message,
@@ -164,14 +158,12 @@ from src.scheduler import (
     package_status_label,
 )
 
-router = APIRouter()
-
 
 @contextmanager
 def _timed(timings: dict, label: str):
     """
     Times a block of code and stores the duration in timings[label] (seconds).
-    Useful for diagnosing response latency - which stage (DB, Gemini, WhatsApp
+    Useful for diagnosing response latency - which stage (DB, Gemini, Telegram
     send) actually costs the time, instead of guessing.
     """
     start = time.perf_counter()
@@ -187,111 +179,10 @@ def _log_timing(timings: dict, user_id, msg_type: str, intent: str | None = None
     print(f"[timing] user={user_id} type={msg_type} intent={intent} total={total:.2f}s ({breakdown})")
 
 
-@router.get("/webhook")
-async def verify_webhook(
-    hub_mode: str | None = Query(default=None, alias="hub.mode"),
-    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
-    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
-):
-    """
-    Initial handshake from Meta when registering the callback URL in the dashboard.
-    Meta sends query params containing dots (hub.mode etc.), so the aliases here
-    map them to valid Python parameter names.
-    """
-    if (
-        hub_mode == "subscribe"
-        and hub_verify_token is not None
-        and WHATSAPP_WEBHOOK_VERIFY_TOKEN is not None
-        and hmac.compare_digest(hub_verify_token, WHATSAPP_WEBHOOK_VERIFY_TOKEN)
-    ):
-        return Response(content=hub_challenge, media_type="text/plain")
-    return Response(status_code=403)
 
 
-def _verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
-    """
-    PRD 14.1 - HMAC-SHA256 verification of the request body against
-    X-Hub-Signature-256. Uses a constant-time comparison (hmac.compare_digest)
-    to prevent timing attacks.
-    """
-    if not signature_header or not WHATSAPP_APP_SECRET:
-        return False
-    if not signature_header.startswith("sha256="):
-        return False
-    expected_signature = signature_header.split("sha256=", 1)[1]
-    computed = hmac.new(
-        WHATSAPP_APP_SECRET.encode("utf-8"), raw_body, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(computed, expected_signature)
 
 
-@router.post("/webhook")
-async def receive_webhook(request: Request, x_hub_signature_256: str | None = Header(default=None)):
-    raw_body = await request.body()
-
-    # 14.1 - invalid signature: immediate 403, without touching the DB or calling Gemini
-    if not _verify_signature(raw_body, x_hub_signature_256):
-        return Response(status_code=403)
-
-    payload = await request.json()
-
-    # Meta may batch several entries/changes/messages into a single webhook
-    # (officially documented) - all of them must be processed, not just the first.
-    incoming = []
-    statuses = []
-    try:
-        for entry in payload.get("entry", []):
-            for change in entry.get("changes", []):
-                value = change.get("value", {})
-                for message in value.get("messages", []) or []:
-                    incoming.append(message)
-                for status in value.get("statuses", []) or []:
-                    statuses.append(status)
-    except (KeyError, TypeError, AttributeError):
-        # Unexpected payload shape - do not crash the server, just ignore it.
-        # AttributeError specifically: payload/entry/value.get(...) all
-        # assume a dict at that position; if Meta (or a malformed/forged
-        # request that still passed signature verification) sends a
-        # differently-shaped value there - a string, a list, null - .get()
-        # raises AttributeError, not KeyError/TypeError, and was falling
-        # through this guard into an unhandled 500. Found by
-        # tests/test_webhook_signature.py::test_post_ignores_malformed_payload_without_crashing
-        # on 2026-09-13, which is exactly the PRD 12.3 guarantee this
-        # try/except exists to keep.
-        return Response(status_code=200)
-
-    # 2026-09-18: a "failed" status callback carries the ONLY real evidence
-    # WhatsApp gives for why an accepted (200 OK at send-time) message never
-    # actually reached the recipient - found live: 3 reminder sends all
-    # returned success from the Graph API, but the recipients reported never
-    # receiving them, and there was no way to tell why after the fact
-    # because this webhook's own "statuses" entries were silently discarded
-    # entirely.
-    #
-    # 2026-09-18 follow-up (same investigation): a "failed" status with
-    # WhatsApp's 24h-window error code (131047) can arrive for a message
-    # send_text_or_template already treated as successful (200 OK at send
-    # time) - found live, 3 real reminder sends did exactly this. Every
-    # status is handed to handle_delivery_status so it can retry via
-    # template when that happens (see its own docstring); logging here
-    # still happens for every status regardless.
-    for status in statuses:
-        if status.get("status") == "failed":
-            print(f"[whatsapp] delivery FAILED to {status.get('recipient_id')}: {status.get('errors')}")
-        else:
-            print(f"[whatsapp] status update for {status.get('recipient_id')}: {status.get('status')}")
-        message_id = status.get("id")
-        if message_id:
-            handle_delivery_status(message_id, status.get("status"), status.get("errors"))
-
-    if not incoming:
-        # A status-only webhook (sent/delivered/read/failed) - already logged above, nothing else to process.
-        return Response(status_code=200)
-
-    for message in incoming:
-        _process_single_message(message)
-
-    return Response(status_code=200)
 
 
 def _build_tools_context(
@@ -607,9 +498,9 @@ _FORWARDED_SUGGESTION_PREAMBLE = (
 
 def _is_forwarded_message(message: dict) -> bool:
     """
-    True when WhatsApp itself marked this message as forwarded - message["context"]
+    True when Telegram itself marked this message as forwarded - message["context"]
     carries "forwarded" (forwarded 1-4 times) or "frequently_forwarded" (5+ times,
-    per Meta's Cloud API); the latter implies the former, but both are checked
+    per the Bot API); the latter implies the former, but both are checked
     directly rather than assumed, since that's exactly the kind of vendor-payload
     detail worth verifying rather than guessing.
     """
@@ -630,7 +521,7 @@ def _pick_reaction_emoji(text: str) -> str | None:
     a person actually reacts to messages.
     """
     prompt = (
-        "המשתמש שלח לבוט וואטסאפ את ההודעה הבאה. אם יש אימוג'י בודד שמתאים לה "
+        "המשתמש שלח לבוט טלגרם את ההודעה הבאה. אם יש אימוג'י בודד שמתאים לה "
         "באופן טבעי - לפי התוכן, הטון, או מה שהיא מבקשת (למשל שמחה, תודה, עצב, "
         "משהו מצחיק, בקשה שקשורה ליומן/תזכורת/מזג אוויר/חבילה/מייל) - החזר אותו. "
         "אם ההודעה ניטרלית, טכנית, או שום אימוג'י לא באמת מתאים - אל תמציא אחד בכוח.\n"
@@ -643,7 +534,7 @@ def _pick_reaction_emoji(text: str) -> str | None:
     return result.get("emoji") or None
 
 
-def _react_to_message_in_background(from_number: str, whatsapp_message_id: str, text: str) -> None:
+def _react_to_message_in_background(from_number: str, incoming_message_id: str, text: str) -> None:
     """
     Runs on a background thread (mirrors src/db/models.py's own
     _embed_message_in_background, same reasoning) so picking and sending a
@@ -658,7 +549,7 @@ def _react_to_message_in_background(from_number: str, whatsapp_message_id: str, 
     if not emoji:
         return
     try:
-        send_reaction(from_number, whatsapp_message_id, emoji)
+        send_reaction(from_number, incoming_message_id, emoji)
     except Exception as e:
         print(f"[webhook] sending reaction failed (non-fatal): {e}")
 
@@ -717,7 +608,7 @@ def _check_task_confirmation(text_body: str, pending_reminder, user: dict) -> di
         reschedule_persistent_reminder_for_next_occurrence(pending_reminder["id"], next_occurrence)
     owner_notice = t("wh.check_task_confirmation.1", recipient_name=pending_reminder['recipient_name'], content=pending_reminder['content'])
     try:
-        send_text_message(to=pending_reminder["owner_whatsapp_number"], body=owner_notice)
+        send_text_message(to=pending_reminder["owner_chat_id"], body=owner_notice)
     except Exception as e:
         print(f"[webhook] failed to notify owner of task confirmation (non-fatal): {e}")
 
@@ -730,7 +621,7 @@ def _suggest_action_from_forwarded(
 ) -> dict | None:
     """
     Batch 9 (2026-09-14): proactive suggestions from a message the user
-    forwarded to the bot (WhatsApp marks these via message["context"]["forwarded"]
+    forwarded to the bot (Telegram marks these via message["context"]["forwarded"]
     - see _process_single_message). Example from the feature request: a
     forwarded "מחר בערב ב-20:00 יש מבצע בתל אביב" should prompt "want me to add
     this to your calendar?" rather than just being read and ignored like an
@@ -1035,7 +926,7 @@ def _handle_confirm_suggestion_tool(user: dict, args: dict) -> str:
 def _handle_generate_image(user: dict, args: dict) -> str:
     """
     New feature (2026-09-26): generate_image tool. Calls the real Gemini
-    image model and sends the result as a genuine WhatsApp image message -
+    image model and sends the result as a genuine Telegram image message -
     a side effect of the handler itself, not something that flows through
     the normal text-reply pipeline (there is nowhere else in this codebase's
     reply shape to carry raw image bytes). The string this returns is only
@@ -1051,7 +942,7 @@ def _handle_generate_image(user: dict, args: dict) -> str:
         return t("wh.generate_image.2")
 
     image_bytes, mime_type = result
-    if not send_image_bytes(user["whatsapp_number"], image_bytes, mime_type):
+    if not send_image_bytes(user["chat_id"], image_bytes, mime_type):
         return t("wh.generate_image.3")
     return t("wh.generate_image.4")
 
@@ -1067,7 +958,7 @@ def _handle_edit_image(user: dict, args: dict) -> str:
     discipline tools_for()'s own docstring already applies to admin_only.
     Re-downloads the original bytes via download_media rather than ever
     threading raw image bytes through Gemini's own function-call args - only
-    the WhatsApp media_id is persisted (see save_pending_image_upload).
+    the Telegram file_id is persisted (see save_pending_image_upload).
 
     Deliberately does not chain: the edited result does NOT become the new
     pending upload, so a further edit request needs the user to send/attach
@@ -1095,7 +986,7 @@ def _handle_edit_image(user: dict, args: dict) -> str:
         return t("wh.edit_image.4")
 
     edited_bytes, edited_mime = result
-    if not send_image_bytes(user["whatsapp_number"], edited_bytes, edited_mime):
+    if not send_image_bytes(user["chat_id"], edited_bytes, edited_mime):
         return t("wh.edit_image.5")
     return t("wh.edit_image.6")
 
@@ -1125,7 +1016,7 @@ def _handle_send_feature_request(user: dict, args: dict) -> str:
         if not admin["is_admin"]:
             continue
         try:
-            send_text_message(to=admin["whatsapp_number"], body=body)
+            send_text_message(to=admin["chat_id"], body=body)
         except Exception as e:
             print(f"[webhook] could not notify admin {admin['id']} of a feature request (non-fatal): {e}")
 
@@ -1214,7 +1105,7 @@ def _handle_manage_proactive_settings(user: dict, args: dict) -> str:
 
 def _looks_like_email_or_phone(identifier: str) -> bool:
     """A VIP identifier must be a real, matchable sender identity - an
-    email's own address or a WhatsApp number, never a bare name (nothing
+    email's own address or a Telegram chat id, never a bare name (nothing
     incoming is ever labeled with a display name, only these two)."""
     digits_only = "".join(ch for ch in identifier if ch.isdigit())
     return "@" in identifier or len(digits_only) >= 7
@@ -1223,7 +1114,7 @@ def _looks_like_email_or_phone(identifier: str) -> bool:
 def _handle_manage_vip_senders(user: dict, args: dict) -> str:
     """
     Context-Aware Gatekeeper, stage 1 (2026-09-27) - the VIP list a sender
-    (email or WhatsApp number) needs to be on to bypass quiet hours and an
+    (email or Telegram chat id) needs to be on to bypass quiet hours and an
     explicit "busy" status (never the daily cap - see
     src.proactive.should_deliver_now). Owner-scoped like contacts - each
     user's list is their own, not shared with anyone else's.
@@ -1253,7 +1144,7 @@ def _handle_manage_vip_senders(user: dict, args: dict) -> str:
             if contact is None:
                 return t("wh.manage_vip_senders.2", identifier=identifier)
             label = label or contact["name"]
-            identifier = contact["whatsapp_number"]
+            identifier = contact["chat_id"]
         add_vip_sender(user["id"], identifier, label)
         label_part = f" ({label})" if label else ""
         return t("wh.manage_vip_senders.3", identifier=identifier, label_part=label_part)
@@ -1271,7 +1162,7 @@ def _handle_manage_vip_senders(user: dict, args: dict) -> str:
         if not _looks_like_email_or_phone(identifier):
             contact = get_contact_by_name(user["id"], identifier)
             if contact is not None:
-                identifier = contact["whatsapp_number"]
+                identifier = contact["chat_id"]
         removed = remove_vip_sender(user["id"], identifier)
         return t("wh.manage_vip_senders.7", identifier=identifier) if removed else t("wh.manage_vip_senders.8", identifier=identifier)
 
@@ -1428,7 +1319,7 @@ def _handle_manage_my_data(user: dict, args: dict) -> str:
     "show me what you have on me" / "delete my history", the same request
     _handle_explain_privacy's own text points users toward. action="show"
     summarizes counts only (never re-dumps raw content - if someone wants
-    their actual messages back they can just scroll WhatsApp, or ask a
+    their actual messages back they can just scroll Telegram, or ask a
     normal question that pulls from history); action="delete_history"
     removes only this user's own `messages` rows (their conversation log),
     not their reminders/tasks/contacts/facts - "history" was asked for
@@ -1459,7 +1350,7 @@ def _handle_manage_my_data(user: dict, args: dict) -> str:
 def _process_single_message(message: dict) -> None:
     """Runs the pipeline with the sender's AI provider scoped to this request only (see src/ai.py)."""
     try:
-        sender = get_user_by_whatsapp_number(message["from"])
+        sender = get_user_by_chat_id(message["from"])
     except Exception:
         sender = None
     with use_user(sender) if sender is not None else nullcontext():
@@ -1472,8 +1363,8 @@ def _process_single_message_impl(message: dict) -> None:
     its own error handling, so a failure in one does not affect the others (12.3).
     """
     try:
-        whatsapp_message_id = message["id"]
-        from_number = message["from"]  # E.164 format without the leading +, e.g. "972541234567"
+        incoming_message_id = message["id"]
+        from_number = message["from"]  # the Telegram chat id, digits only
         msg_type = message.get("type", "text")
     except KeyError:
         return
@@ -1486,7 +1377,7 @@ def _process_single_message_impl(message: dict) -> None:
 
     # 12.1 - idempotency: if this ID was already processed, do not process it again
     with _timed(timings, "idempotency_check"):
-        already_processed = message_exists(whatsapp_message_id)
+        already_processed = message_exists(incoming_message_id)
     if already_processed:
         return
 
@@ -1494,7 +1385,7 @@ def _process_single_message_impl(message: dict) -> None:
     # automatically, and no media download or Gemini call happens (which would
     # cost money for a stranger's traffic)
     with _timed(timings, "user_lookup"):
-        user = get_user_by_whatsapp_number(from_number)
+        user = get_user_by_chat_id(from_number)
     if user is None:
         print(f"[webhook] message from unknown number ({from_number}) - ignoring")
         return
@@ -1583,10 +1474,10 @@ def _process_single_message_impl(message: dict) -> None:
             # cannot read - this saves bandwidth and gives a clearer message.
             if declared_mime and not is_supported_media(declared_mime):
                 save_incoming_message(
-                    user["id"], f"[unsupported file: {declared_mime}]", whatsapp_message_id, msg_type,
+                    user["id"], f"[unsupported file: {declared_mime}]", incoming_message_id, msg_type,
                     parsed_intent="media_unsupported",
                 )
-                with _timed(timings, "whatsapp_send"):
+                with _timed(timings, "telegram_send"):
                     send_text_message(to=from_number, body=t("reply.media_unsupported"))
                 save_outgoing_message(user["id"], t("reply.media_unsupported"))
                 _log_timing(timings, user["id"], msg_type, "media_unsupported")
@@ -1596,10 +1487,10 @@ def _process_single_message_impl(message: dict) -> None:
                 downloaded = download_media(media_id) if media_id else None
             if downloaded is None:
                 save_incoming_message(
-                    user["id"], "[file - download failed]", whatsapp_message_id, msg_type,
+                    user["id"], "[file - download failed]", incoming_message_id, msg_type,
                     parsed_intent="media_download_failed",
                 )
-                with _timed(timings, "whatsapp_send"):
+                with _timed(timings, "telegram_send"):
                     send_text_message(to=from_number, body=t("reply.media_download_failed"))
                 save_outgoing_message(user["id"], t("reply.media_download_failed"))
                 _log_timing(timings, user["id"], msg_type, "media_download_failed")
@@ -1610,10 +1501,10 @@ def _process_single_message_impl(message: dict) -> None:
             # The declared type can be missing or wrong, so re-check what we got.
             if not is_supported_media(mime_type):
                 save_incoming_message(
-                    user["id"], f"[unsupported file: {mime_type}]", whatsapp_message_id, msg_type,
+                    user["id"], f"[unsupported file: {mime_type}]", incoming_message_id, msg_type,
                     parsed_intent="media_unsupported",
                 )
-                with _timed(timings, "whatsapp_send"):
+                with _timed(timings, "telegram_send"):
                     send_text_message(to=from_number, body=t("reply.media_unsupported"))
                 save_outgoing_message(user["id"], t("reply.media_unsupported"))
                 _log_timing(timings, user["id"], msg_type, "media_unsupported")
@@ -1621,10 +1512,10 @@ def _process_single_message_impl(message: dict) -> None:
 
             if len(media_bytes) > MAX_MEDIA_BYTES:
                 save_incoming_message(
-                    user["id"], f"[file too large: {len(media_bytes)} bytes]", whatsapp_message_id, msg_type,
+                    user["id"], f"[file too large: {len(media_bytes)} bytes]", incoming_message_id, msg_type,
                     parsed_intent="media_too_large",
                 )
-                with _timed(timings, "whatsapp_send"):
+                with _timed(timings, "telegram_send"):
                     send_text_message(to=from_number, body=t("reply.media_too_large"))
                 save_outgoing_message(user["id"], t("reply.media_too_large"))
                 _log_timing(timings, user["id"], msg_type, "media_too_large")
@@ -1632,7 +1523,7 @@ def _process_single_message_impl(message: dict) -> None:
 
             # New feature (2026-09-26): a real (non-PDF) image becomes available
             # for edit_image - see save_pending_image_upload's own docstring for
-            # why only the WhatsApp media_id is kept, never the bytes themselves.
+            # why only the Telegram file_id is kept, never the bytes themselves.
             # Saved BEFORE classification so the same message's own caption (if
             # it asks for an edit) already sees it as available, exactly like a
             # bare follow-up text message a little later would.
@@ -1667,10 +1558,10 @@ def _process_single_message_impl(message: dict) -> None:
                 downloaded = download_media(media_id) if media_id else None
             if downloaded is None:
                 save_incoming_message(
-                    user["id"], "[voice message - download failed]", whatsapp_message_id, "voice",
+                    user["id"], "[voice message - download failed]", incoming_message_id, "voice",
                     parsed_intent="voice_download_failed",
                 )
-                with _timed(timings, "whatsapp_send"):
+                with _timed(timings, "telegram_send"):
                     send_text_message(to=from_number, body=t("reply.voice_download_failed"))
                 save_outgoing_message(user["id"], t("reply.voice_download_failed"))
                 _log_timing(timings, user["id"], msg_type, "voice_download_failed")
@@ -1695,7 +1586,7 @@ def _process_single_message_impl(message: dict) -> None:
             raw_content = result.get("transcript") or "[voice message]"
 
         with _timed(timings, "db_save_incoming"):
-            save_incoming_message(user["id"], raw_content, whatsapp_message_id, msg_type, parsed_intent=result["intent"])
+            save_incoming_message(user["id"], raw_content, incoming_message_id, msg_type, parsed_intent=result["intent"])
 
         # Batch 11 (2026-09-14): fire-and-forget on a background thread - see
         # _react_to_message_in_background's docstring. Uses raw_content
@@ -1704,7 +1595,7 @@ def _process_single_message_impl(message: dict) -> None:
         # behavior applies uniformly to every message type, not just text.
         threading.Thread(
             target=partial(copy_context().run, _react_to_message_in_background),
-            args=(from_number, whatsapp_message_id, raw_content), daemon=True,
+            args=(from_number, incoming_message_id, raw_content), daemon=True,
         ).start()
 
         # New feature (2026-09-26): when the old classifier's "chat" handling
@@ -1802,7 +1693,7 @@ def _process_single_message_impl(message: dict) -> None:
             elif result["intent"] == "web_search":
                 result = {**result, "reply": _handle_web_search(result["web_search"])}
 
-        with _timed(timings, "whatsapp_send"):
+        with _timed(timings, "telegram_send"):
             send_text_message(to=from_number, body=result["reply"])
         save_outgoing_message(user["id"], result["reply"])
         _log_timing(timings, user["id"], msg_type, result["intent"])
@@ -2006,7 +1897,7 @@ def _handle_add_contact(user: dict, contact: dict, reply_text: str) -> str:
     """Saves a new contact and returns reply_text as-is - a pure side effect
     with nothing to compose or override, extracted 2026-09-14 from what used
     to be inline dispatch logic (see _handle_reminder's docstring)."""
-    save_contact(user["id"], contact["name"], contact["whatsapp_number"])
+    save_contact(user["id"], contact["name"], contact["chat_id"])
     return reply_text
 
 
@@ -2098,14 +1989,14 @@ def _resolve_family_member_attendee_emails(
     (gmail.get_own_email_address, via their OWN connection - never
     user-entered, so it can't be stale or mistyped). If they're not
     connected to Google at all, there is no email to invite - the caller
-    falls back to a plain WhatsApp notice for those instead. A name that
+    falls back to a plain Telegram notice for those instead. A name that
     doesn't resolve to a registered user (an ordinary saved contact, or
     nobody in particular) is silently skipped - unchanged from before this
     feature, since there's no Google account of theirs to invite.
 
     Per-attendee error isolation (12.3 principle). Returns
     (attendee_emails, not_connected_users) - not_connected_users are the
-    corresponding user rows for the caller's own WhatsApp fallback.
+    corresponding user rows for the caller's own Telegram fallback.
     """
     from src.integrations.gmail import get_own_email_address
 
@@ -2166,7 +2057,7 @@ def _handle_calendar(user: dict, calendar: dict) -> str:
             for other_user in not_connected_users:
                 try:
                     send_text_message(
-                        to=other_user["whatsapp_number"],
+                        to=other_user["chat_id"],
                         body=t("wh.calendar.2", display_name=user['display_name'], summary=calendar['summary'], p3=start.strftime('%d/%m %H:%M')),
                     )
                     reply += t("wh.calendar.9", display_name=other_user['display_name'])
@@ -3045,21 +2936,15 @@ def _match_reminder(reminders, match_content: str):
 
 def _normalize_number(raw: str) -> str:
     """
-    Normalises a number to international format (digits only, no +), matching
-    what WhatsApp sends in the webhook. Without this, a user added as
-    "0501234567" would never match the number that actually arrives
-    ("972501234567") - and would break silently.
-
-    The prompt does ask Gemini to convert, but that is not relied upon:
-    converting in code is the real safeguard.
+    Normalises a Telegram chat id to bare digits. Telegram user ids are positive integers; people
+    paste them with spaces or other decoration, and models sometimes add a "+".
     """
-    digits = "".join(ch for ch in raw if ch.isdigit())
-    if digits.startswith("00"):
-        digits = digits[2:]
-    if digits.startswith("0"):
-        # Israeli local number: 0501234567 -> 972501234567
-        digits = "972" + digits[1:]
-    return digits
+    return "".join(ch for ch in raw if ch.isdigit())
+
+
+def is_valid_chat_id(chat_id: str) -> bool:
+    """Telegram user ids run from about 5 to 12 digits today; 15 leaves room for growth."""
+    return chat_id.isdigit() and 5 <= len(chat_id) <= 15
 
 
 def _handle_user_manage(user: dict, user_manage: dict) -> str:
@@ -3086,11 +2971,11 @@ def _handle_user_manage(user: dict, user_manage: dict) -> str:
         for u in users:
             status = "✅" if u["is_active"] else "🚫"
             admin_mark = " 👑" if u["is_admin"] else ""
-            lines.append(f"{status} {u['display_name']}{admin_mark} — {u['whatsapp_number']}")
+            lines.append(f"{status} {u['display_name']}{admin_mark} — {u['chat_id']}")
         return t("wh.user_manage.11") + "\n".join(lines)
 
-    number = _normalize_number(user_manage.get("whatsapp_number") or "")
-    if not (11 <= len(number) <= 15):
+    number = _normalize_number(user_manage.get("chat_id") or "")
+    if not is_valid_chat_id(number):
         return t("wh.user_manage.2")
 
     if action == "add":
@@ -3315,8 +3200,8 @@ def _handle_kids_schedule(user: dict, args: dict) -> str:
         if not rows and not kid_name:
             # Maybe this is a kid asking about their OWN schedule - saved
             # under a parent's account, not their own. See
-            # find_kid_schedule_owner_by_whatsapp_number's own docstring.
-            match = find_kid_schedule_owner_by_whatsapp_number(user["whatsapp_number"])
+            # find_kid_schedule_owner_by_chat_id's own docstring.
+            match = find_kid_schedule_owner_by_chat_id(user["chat_id"])
             if match:
                 owner_user_id, matched_kid_name = match
                 rows = get_kid_schedule(owner_user_id, matched_kid_name)

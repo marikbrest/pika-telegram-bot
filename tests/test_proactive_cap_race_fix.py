@@ -13,7 +13,7 @@ from src.db.models import (
 
 
 def test_reserve_succeeds_when_under_cap(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     row_id = reserve_proactive_notification_slot(1, cap=3, category="calendar_moved", summary="x")
 
     assert row_id is not None
@@ -21,7 +21,7 @@ def test_reserve_succeeds_when_under_cap(db_path, make_user):
 
 
 def test_reserve_fails_atomically_once_the_cap_is_reached(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     reserve_proactive_notification_slot(1, cap=1, category="a", summary="x")
 
     row_id = reserve_proactive_notification_slot(1, cap=1, category="b", summary="y")
@@ -35,7 +35,7 @@ def test_reserve_is_the_single_atomic_check_and_insert_a_race_would_defeat(db_pa
     reserving for the same user with cap=1 - only one may succeed, no
     matter the call order, because each reservation is one atomic SQL
     statement rather than a separate read-then-write pair."""
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
 
     first = reserve_proactive_notification_slot(1, cap=1, category="calendar_moved", summary="a")
     second = reserve_proactive_notification_slot(1, cap=1, category="email_urgent_vip", summary="b")
@@ -46,7 +46,7 @@ def test_reserve_is_the_single_atomic_check_and_insert_a_race_would_defeat(db_pa
 
 
 def test_delete_proactive_notification_log_row_releases_the_slot(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     row_id = reserve_proactive_notification_slot(1, cap=1, category="a", summary="x")
     assert count_todays_proactive_notifications(1) == 1
 
@@ -58,8 +58,8 @@ def test_delete_proactive_notification_log_row_releases_the_slot(db_path, make_u
 
 
 def test_reservations_are_isolated_per_user(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000002")
+    make_user(chat_id="972500000001")
+    make_user(chat_id="972500000002")
     reserve_proactive_notification_slot(1, cap=1, category="a", summary="x")
 
     assert count_todays_proactive_notifications(1) == 1

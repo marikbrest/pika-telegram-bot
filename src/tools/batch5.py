@@ -53,7 +53,7 @@ def _validate_user_manage_args(args: dict) -> bool:
     action = args.get("action")
     if action not in ("list", "add", "disable"):
         return False
-    if action in ("add", "disable") and not args.get("whatsapp_number"):
+    if action in ("add", "disable") and not args.get("chat_id"):
         return False
     return True
 
@@ -73,11 +73,10 @@ user_manage_tool = register(Tool(
         "type": "object",
         "properties": {
             "action": {"type": "string", "enum": ["list", "add", "disable"]},
-            "whatsapp_number": {
+            "chat_id": {
                 "type": "string",
                 "description": (
-                    "Only for action=add/disable: international format, digits only, no '+'. "
-                    "Convert an Israeli local number (05X-XXXXXXX) to 972XXXXXXXXX."
+                    "Only for action=add/disable: the person's Telegram chat id, digits only (for example 123456789)."
                 ),
             },
             "display_name": {

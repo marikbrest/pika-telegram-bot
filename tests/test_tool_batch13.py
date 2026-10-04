@@ -198,8 +198,8 @@ def test_re_enabling_with_no_time_change_does_not_touch_the_sent_marker(user):
 
 
 def test_one_users_toggle_is_isolated_from_another(make_user):
-    user_a = {"id": make_user(whatsapp_number="972500000001")}
-    user_b = {"id": make_user(whatsapp_number="972500000002")}
+    user_a = {"id": make_user(chat_id="972500000001")}
+    user_b = {"id": make_user(chat_id="972500000002")}
 
     _handle_daily_meetings_summary(user_a, {"action": "enable", "time": "09:00"})
 

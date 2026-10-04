@@ -17,7 +17,7 @@ parameter.
 """
 from unittest.mock import patch
 
-from src.db.models import get_user_by_whatsapp_number
+from src.db.models import get_user_by_chat_id
 from src.integrations.google_oauth import GoogleAuthExpiredError, NotConnectedError
 from src.webhook_handler import _handle_calendar
 
@@ -25,13 +25,13 @@ START = "2026-09-28T19:00:00"
 END = "2026-09-28T20:00:00"
 
 
-def _user(whatsapp_number):
-    return get_user_by_whatsapp_number(whatsapp_number)
+def _user(chat_id):
+    return get_user_by_chat_id(chat_id)
 
 
 def test_create_event_invites_a_named_family_member_by_email(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    make_user(whatsapp_number="972500000002", display_name="רונית")
+    make_user(chat_id="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000002", display_name="רונית")
     ronit = _user("972500000002")
 
     with patch("src.webhook_handler.check_conflicts", return_value=[]), \
@@ -52,8 +52,8 @@ def test_create_event_recognizes_a_known_nickname_alias(db_path, make_user):
     """Found live: a parent typed a nickname, not the registered display
     name - an exact-only match would have missed the other parent
     entirely, reproducing the original bug."""
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    make_user(whatsapp_number="972500000002", display_name="רונית")
+    make_user(chat_id="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000002", display_name="רונית")
     ronit = _user("972500000002")
 
     with patch("src.webhook_handler.check_conflicts", return_value=[]), \
@@ -71,7 +71,7 @@ def test_create_event_skips_a_name_that_is_not_a_registered_family_member(db_pat
     """An ordinary named person (not a bot user) - e.g. 'תמר' - has no
     Google account of their own for this bot to invite, so they're
     silently skipped, same as before this feature existed."""
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     yossi = _user("972500000001")
 
     with patch("src.webhook_handler.check_conflicts", return_value=[]), \
@@ -88,7 +88,7 @@ def test_create_event_skips_a_name_that_is_not_a_registered_family_member(db_pat
 def test_create_event_does_not_invite_the_requester_to_their_own_event(db_path, make_user):
     """If the requester's own name is (redundantly) in attendee_names, it
     must not try to invite them to their own event."""
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     yossi = _user("972500000001")
 
     with patch("src.webhook_handler.check_conflicts", return_value=[]), \
@@ -101,9 +101,9 @@ def test_create_event_does_not_invite_the_requester_to_their_own_event(db_path, 
     assert mock_create.call_args.kwargs["attendee_emails"] == []
 
 
-def test_create_event_falls_back_to_a_whatsapp_notice_when_the_attendee_is_not_connected(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    make_user(whatsapp_number="972500000002", display_name="רונית")
+def test_create_event_falls_back_to_a_telegram_notice_when_the_attendee_is_not_connected(db_path, make_user):
+    make_user(chat_id="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000002", display_name="רונית")
     ronit = _user("972500000002")
 
     with patch("src.webhook_handler.check_conflicts", return_value=[]), \
@@ -126,8 +126,8 @@ def test_create_event_for_one_attendees_email_lookup_failing_does_not_break_the_
     """Per-attendee error isolation (12.3) - a genuinely broken second
     account must never take down the requester's own event creation, or an
     exception escaping out of _handle_calendar."""
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    make_user(whatsapp_number="972500000002", display_name="רונית")
+    make_user(chat_id="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000002", display_name="רונית")
     ronit = _user("972500000002")
 
     with patch("src.webhook_handler.check_conflicts", return_value=[]), \
@@ -145,7 +145,7 @@ def test_create_event_for_one_attendees_email_lookup_failing_does_not_break_the_
 
 
 def test_create_event_with_no_attendee_names_behaves_exactly_as_before(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     yossi = _user("972500000001")
 
     with patch("src.webhook_handler.check_conflicts", return_value=[]), \

@@ -4,7 +4,7 @@ Phase 2 - PRD section 6.
 
 Approval model (see the PRD section on email_drafts): the bot never sends an
 email directly from intent parsing. It always saves a draft to the DB first
-(email_drafts, status='pending_approval'), shows it to the user over WhatsApp,
+(email_drafts, status='pending_approval'), shows it to the user over Telegram,
 and only then does webhook_handler call send_email() after the user explicitly
 approves. This module makes no "send or not" decisions - that is the handler's
 responsibility.
@@ -322,7 +322,7 @@ def format_unanswered_for_reply(unanswered: list[dict]) -> str:
 def _strip_header_injection(value: str) -> str:
     """
     to_address and subject ultimately come from a Gemini JSON response driven
-    by the user's own WhatsApp text - a user could try to get a literal
+    by the user's own Telegram text - a user could try to get a literal
     newline into either (e.g. "...\\nBcc: attacker@evil.com") to smuggle in
     an extra MIME header. In practice the draft is always shown back to the
     user for approval before send_email() is ever called, so a forged header
@@ -357,7 +357,7 @@ def send_email(user_id: int, to_address: str, subject: str, body: str) -> str:
 
 def _clean_text(text: str, max_len: int | None = None) -> str:
     """
-    Cleans text taken from emails before displaying it in WhatsApp:
+    Cleans text taken from emails before displaying it in Telegram:
     - decodes HTML entities (&#39; -> ', &amp; -> & etc.)
     - strips invisible characters (padding that marketing emails add to defeat
       automatic truncation - the Unicode "format" and "combining mark" categories)

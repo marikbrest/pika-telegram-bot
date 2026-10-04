@@ -5,7 +5,7 @@ labels: bug
 ---
 **What happened / what you expected**
 
-**Steps to reproduce** (include the WhatsApp message you sent, with private details removed)
+**Steps to reproduce** (include the Telegram message you sent, with private details removed)
 
 **Logs** (`logs/uvicorn.log` excerpt - redact numbers, tokens and email addresses)
 

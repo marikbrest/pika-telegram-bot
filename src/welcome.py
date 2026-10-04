@@ -2,17 +2,14 @@
 One-time welcome message for a newly added user, linking the privacy policy and terms.
 
 A policy nobody is shown protects nobody, so adding a user (by chat or from the dashboard) also sends this once.
-It needs PUBLIC_BASE_URL (the bot does not otherwise know its own public address) and, because a brand-new user has
-never messaged the bot, falls back to the `welcome_user` template (2 parameters: privacy URL, terms URL) when the
-24-hour window is closed - see docs/SETUP_META.md.
+It needs PUBLIC_BASE_URL (the bot does not otherwise know its own public address). The message can only be delivered
+once the person has pressed Start in the bot's chat, so a failed send is retried the next time something calls this.
 """
 from src import config
-from src.config import OPERATOR_NAME, PUBLIC_BASE_URL, WHATSAPP_TEMPLATE_LANGUAGE
+from src.config import OPERATOR_NAME, PUBLIC_BASE_URL
 from src.db.models import get_connection
 from src.i18n import t
-from src.integrations.whatsapp import send_text_or_template
-
-TEMPLATE_NAME = "welcome_user"
+from src.integrations.telegram import send_text_message
 
 
 def welcome_text(privacy_url: str, terms_url: str) -> str:
@@ -29,7 +26,7 @@ def send_welcome_if_needed(user_id: int) -> str:
         conn = get_connection()
         try:
             row = conn.execute(
-                "SELECT whatsapp_number, welcome_sent_at FROM users WHERE id = ?", (user_id,)
+                "SELECT chat_id, welcome_sent_at FROM users WHERE id = ?", (user_id,)
             ).fetchone()
         finally:
             conn.close()
@@ -39,13 +36,7 @@ def send_welcome_if_needed(user_id: int) -> str:
             return "already_sent"
 
         privacy_url, terms_url = f"{PUBLIC_BASE_URL}/privacy", f"{PUBLIC_BASE_URL}/terms"
-        ok = send_text_or_template(
-            to=row["whatsapp_number"],
-            body=welcome_text(privacy_url, terms_url),
-            template_name=TEMPLATE_NAME,
-            language_code=WHATSAPP_TEMPLATE_LANGUAGE,
-            body_params=[privacy_url, terms_url],
-        )
+        ok = send_text_message(to=row["chat_id"], body=welcome_text(privacy_url, terms_url))
         if not ok:
             return "failed"
         conn = get_connection()

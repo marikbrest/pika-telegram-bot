@@ -2,7 +2,7 @@
 check_watches (2026-09-14) - the generic watch/trigger engine, structured
 the same way test_scheduler_package_giveup.py tests
 check_and_notify_package_changes: real DB rows via the db_path/make_user
-fixtures, real scheduler function, only the checker and the WhatsApp send
+fixtures, real scheduler function, only the checker and the Telegram send
 mocked.
 """
 from datetime import datetime, timedelta
@@ -33,11 +33,11 @@ def test_first_check_establishes_baseline_without_notifying(db_path, make_user):
     """A watch with last_state=NULL (never checked) must not fire a
     notification on its very first check - that would be a false "it
     changed" for something that was simply never observed before."""
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     _seed_watch(user_id, "web_page", "https://x.com", "https://x.com", last_state=None)
 
     with patch("src.integrations.watchers.CHECKERS", {"web_page": lambda uid, target: "initial content"}), \
-         patch("src.integrations.whatsapp.send_text_message") as mock_send:
+         patch("src.integrations.telegram.send_text_message") as mock_send:
         check_watches()
 
     mock_send.assert_not_called()
@@ -46,11 +46,11 @@ def test_first_check_establishes_baseline_without_notifying(db_path, make_user):
 
 
 def test_state_change_sends_exactly_one_notification(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     _seed_watch(user_id, "web_page", "https://x.com", "the docs page", last_state="old content")
 
     with patch("src.integrations.watchers.CHECKERS", {"web_page": lambda uid, target: "new content"}), \
-         patch("src.integrations.whatsapp.send_text_message") as mock_send:
+         patch("src.integrations.telegram.send_text_message") as mock_send:
         check_watches()
 
     mock_send.assert_called_once()
@@ -66,7 +66,7 @@ def test_unchanged_state_sends_no_notification(db_path, make_user):
     _seed_watch(user_id, "web_page", "https://x.com", "label", last_state="same content")
 
     with patch("src.integrations.watchers.CHECKERS", {"web_page": lambda uid, target: "same content"}), \
-         patch("src.integrations.whatsapp.send_text_message") as mock_send:
+         patch("src.integrations.telegram.send_text_message") as mock_send:
         check_watches()
 
     mock_send.assert_not_called()
@@ -79,7 +79,7 @@ def test_checker_returning_none_leaves_state_untouched(db_path, make_user):
     _seed_watch(user_id, "web_page", "https://x.com", "label", last_state="old content")
 
     with patch("src.integrations.watchers.CHECKERS", {"web_page": lambda uid, target: None}), \
-         patch("src.integrations.whatsapp.send_text_message") as mock_send:
+         patch("src.integrations.telegram.send_text_message") as mock_send:
         check_watches()
 
     mock_send.assert_not_called()
@@ -90,7 +90,7 @@ def test_checker_returning_none_leaves_state_untouched(db_path, make_user):
 def test_one_bad_watch_does_not_block_the_others(db_path, make_user):
     """12.3 per-watch error isolation - a checker exception for one watch
     must not stop the rest of the batch."""
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     _seed_watch(user_id, "web_page", "https://broken.com", "broken", last_state="old")
     _seed_watch(user_id, "web_page", "https://fine.com", "fine", last_state="old")
 
@@ -100,7 +100,7 @@ def test_one_bad_watch_does_not_block_the_others(db_path, make_user):
         return "new"
 
     with patch("src.integrations.watchers.CHECKERS", {"web_page": flaky_checker}), \
-         patch("src.integrations.whatsapp.send_text_message"):
+         patch("src.integrations.telegram.send_text_message"):
         check_watches()  # must not raise
 
     states = {w["target"]: w["last_state"] for w in models.list_active_watches(user_id)}
@@ -109,7 +109,7 @@ def test_one_bad_watch_does_not_block_the_others(db_path, make_user):
 
 
 def test_inactive_watches_are_never_checked(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     _seed_watch(user_id, "web_page", "https://x.com", "label", last_state="old")
     conn = models.get_connection()
     try:
@@ -121,7 +121,7 @@ def test_inactive_watches_are_never_checked(db_path, make_user):
     # If this watch were checked, "new" != "old" would trigger a notification -
     # so a call proves the inactive row was skipped, not just that the DB flag stuck.
     with patch("src.integrations.watchers.CHECKERS", {"web_page": lambda uid, target: "new"}), \
-         patch("src.integrations.whatsapp.send_text_message") as mock_send:
+         patch("src.integrations.telegram.send_text_message") as mock_send:
         check_watches()
 
     mock_send.assert_not_called()

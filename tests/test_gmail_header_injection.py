@@ -1,7 +1,7 @@
 """
 Regression tests for the header-injection fix in gmail.py (2026-09-13):
 to_address/subject flow from a Gemini JSON response driven by the user's own
-WhatsApp text, and were passed into email.mime.text.MIMEText unsanitized. A
+Telegram text, and were passed into email.mime.text.MIMEText unsanitized. A
 literal newline in either could smuggle in an extra MIME header (e.g. a
 forged Bcc:). The approval step the bot always shows before send() makes
 this hard to exploit blind, but that is a human catching it, not a

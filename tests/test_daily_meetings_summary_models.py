@@ -31,8 +31,8 @@ def test_enable_then_disable(db_path, make_user):
 
 
 def test_one_users_flag_does_not_affect_another(make_user):
-    user_a = make_user(whatsapp_number="972500000001")
-    user_b = make_user(whatsapp_number="972500000002")
+    user_a = make_user(chat_id="972500000001")
+    user_b = make_user(chat_id="972500000002")
     set_daily_meetings_summary_enabled(user_a, True)
 
     assert get_daily_meetings_summary_enabled(user_a) is True
@@ -40,13 +40,13 @@ def test_one_users_flag_does_not_affect_another(make_user):
 
 
 def test_list_only_includes_enabled_users(make_user):
-    enabled_user = make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000002")  # never enables
+    enabled_user = make_user(chat_id="972500000001")
+    make_user(chat_id="972500000002")  # never enables
     set_daily_meetings_summary_enabled(enabled_user, True)
 
     rows = list_users_with_daily_meetings_summary_enabled()
     assert [r["user_id"] for r in rows] == [enabled_user]
-    assert rows[0]["whatsapp_number"] == "972500000001"
+    assert rows[0]["chat_id"] == "972500000001"
 
 
 def test_list_excludes_a_disabled_user_who_opts_out_again(make_user):
@@ -78,8 +78,8 @@ def test_set_and_get_time(db_path, make_user):
 
 
 def test_one_users_time_does_not_affect_another(make_user):
-    user_a = make_user(whatsapp_number="972500000001")
-    user_b = make_user(whatsapp_number="972500000002")
+    user_a = make_user(chat_id="972500000001")
+    user_b = make_user(chat_id="972500000002")
     set_daily_meetings_summary_time(user_a, "09:00")
 
     assert get_daily_meetings_summary_time(user_a) == "09:00"
@@ -87,7 +87,7 @@ def test_one_users_time_does_not_affect_another(make_user):
 
 
 def test_list_includes_each_users_own_time_and_last_sent_date(make_user):
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     set_daily_meetings_summary_enabled(user_id, True)
     set_daily_meetings_summary_time(user_id, "09:00")
     mark_daily_meetings_summary_sent(user_id, "2026-09-17")
@@ -98,7 +98,7 @@ def test_list_includes_each_users_own_time_and_last_sent_date(make_user):
 
 
 def test_mark_sent_then_query_reflects_it(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     set_daily_meetings_summary_enabled(user_id, True)
     mark_daily_meetings_summary_sent(user_id, "2026-09-17")
 

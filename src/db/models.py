@@ -116,7 +116,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         # 0 for everyone - this is a per-family setting, so a self-hosted
         # deployment should turn it on for its own parent accounts (e.g. via
         # a one-off `UPDATE users SET notify_on_reminder_delivery_failure =
-        # 1 WHERE whatsapp_number IN (...)`), not something this schema
+        # 1 WHERE chat_id IN (...)`), not something this schema
         # should assume on anyone's behalf.
         conn.execute("ALTER TABLE users ADD COLUMN notify_on_reminder_delivery_failure BOOLEAN DEFAULT 0")
         conn.commit()
@@ -134,7 +134,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         # text, and display_name everywhere else, unchanged. NULL for
         # everyone by default - a self-hosted deployment should set this
         # per-parent for its own family (e.g. `UPDATE users SET
-        # kid_facing_role = 'Dad' WHERE whatsapp_number = '...'`).
+        # kid_facing_role = 'Dad' WHERE chat_id = '...'`).
         conn.execute("ALTER TABLE users ADD COLUMN kid_facing_role TEXT")
         conn.commit()
 
@@ -175,14 +175,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         # pipeline in the background (src.tools.shadow), purely to compare
         # verdicts - never acted on, never sent to anyone. No foreign key to
         # messages.id: save_incoming_message doesn't expose the row id it
-        # inserts, and storing whatsapp_message_id + raw_content directly
+        # inserts, and storing incoming_message_id + raw_content directly
         # here is simpler and makes the eventual agreement report
         # self-contained without a join.
         conn.execute(
             """
             CREATE TABLE intent_shadow_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                whatsapp_message_id TEXT,
+                incoming_message_id TEXT,
                 raw_content TEXT,
                 old_intent TEXT NOT NULL,
                 new_tool TEXT,
@@ -382,7 +382,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.commit()
 
     if "vip_senders" not in tables:
-        # Gatekeeper stage 1: a sender (email or WhatsApp number) that
+        # Gatekeeper stage 1: a sender (email or Telegram chat id) that
         # bypasses quiet hours and an explicit "busy" status, but NOT the
         # daily cap - even a VIP message still counts toward "don't
         # overwhelm the phone" (see proactive.should_deliver_now). Owner-
@@ -567,7 +567,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     if "pending_image_uploads" not in tables:
         # New feature (2026-09-26): editing a photo the user sends (see
         # webhook_handler._handle_edit_image / src/tools/batch15.py's
-        # edit_image tool). Stores only the WhatsApp media_id, never the raw
+        # edit_image tool). Stores only the Telegram file_id, never the raw
         # image bytes - the handler re-downloads via download_media(media_id)
         # at edit time, same "don't put binary blobs in SQLite" choice this
         # codebase already made for every other media type. One row per user
@@ -587,16 +587,16 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
-def get_user_by_whatsapp_number(whatsapp_number: str) -> sqlite3.Row | None:
+def get_user_by_chat_id(chat_id: str) -> sqlite3.Row | None:
     """
-    Looks up an existing user by WhatsApp number.
+    Looks up an existing user by Telegram chat id.
     PRD 14.2 - allowlist: users are never created automatically. An unknown
     number returns None and the webhook handler silently ignores the message.
     """
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT * FROM users WHERE whatsapp_number = ? AND is_active = 1", (whatsapp_number,)
+            "SELECT * FROM users WHERE chat_id = ? AND is_active = 1", (chat_id,)
         )
         return cur.fetchone()
     finally:
@@ -605,7 +605,7 @@ def get_user_by_whatsapp_number(whatsapp_number: str) -> sqlite3.Row | None:
 
 def get_user_by_id(user_id: int) -> sqlite3.Row | None:
     """Looks up a user by id - used when arriving from an OAuth callback state
-    rather than from a WhatsApp number."""
+    rather than from a Telegram chat id."""
     conn = get_connection()
     try:
         cur = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,))
@@ -614,16 +614,16 @@ def get_user_by_id(user_id: int) -> sqlite3.Row | None:
         conn.close()
 
 
-def message_exists(whatsapp_message_id: str) -> bool:
+def message_exists(incoming_message_id: str) -> bool:
     """
     Idempotency check (PRD 12.1) - whether a message with this ID was already
-    processed. Meta may deliver the same webhook more than once.
+    processed. Telegram may deliver the same update more than once.
     """
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT 1 FROM messages WHERE whatsapp_message_id = ?",
-            (whatsapp_message_id,),
+            "SELECT 1 FROM messages WHERE incoming_message_id = ?",
+            (incoming_message_id,),
         )
         return cur.fetchone() is not None
     finally:
@@ -659,11 +659,11 @@ def _embed_message_in_background(message_id: int, raw_content: str) -> None:
 
 
 def save_incoming_message(
-    user_id: int, raw_content: str, whatsapp_message_id: str, message_type: str = "text",
+    user_id: int, raw_content: str, incoming_message_id: str, message_type: str = "text",
     parsed_intent: str | None = None,
 ) -> None:
     """
-    Saves an incoming message. Relies on UNIQUE(whatsapp_message_id) as an
+    Saves an incoming message. Relies on UNIQUE(incoming_message_id) as an
     additional safety net.
 
     parsed_intent: the classifier's own verdict for this message (Gemini's
@@ -687,15 +687,15 @@ def save_incoming_message(
     try:
         cur = conn.execute(
             """
-            INSERT INTO messages (user_id, direction, message_type, raw_content, whatsapp_message_id, parsed_intent)
+            INSERT INTO messages (user_id, direction, message_type, raw_content, incoming_message_id, parsed_intent)
             VALUES (?, 'incoming', ?, ?, ?, ?)
             """,
-            (user_id, message_type, raw_content, whatsapp_message_id, parsed_intent),
+            (user_id, message_type, raw_content, incoming_message_id, parsed_intent),
         )
         conn.commit()
         message_id = cur.lastrowid
     except sqlite3.IntegrityError:
-        # Duplicate message (Meta delivered the webhook twice) - not a real error, just ignore
+        # Duplicate message (the update was delivered twice) - not a real error, just ignore
         return
     finally:
         conn.close()
@@ -710,7 +710,7 @@ def save_outgoing_message(user_id: int, raw_content: str) -> None:
     """
     Saves a reply the bot sent. Needed so that the conversation history passed
     to Gemini contains both sides, not just the user's messages.
-    Outgoing messages have no whatsapp_message_id, so there is no UNIQUE conflict.
+    Outgoing messages have no incoming_message_id, so there is no UNIQUE conflict.
     """
     conn = get_connection()
     try:
@@ -828,7 +828,7 @@ def delete_all_messages_for_user(user_id: int) -> int:
         conn.close()
 
 
-def save_contact(owner_user_id: int, name: str, whatsapp_number: str) -> int:
+def save_contact(owner_user_id: int, name: str, chat_id: str) -> int:
     """
     Saves or updates one of the user's contacts (upsert by name - if "Mom"
     already exists, the number is updated rather than creating a duplicate).
@@ -837,11 +837,11 @@ def save_contact(owner_user_id: int, name: str, whatsapp_number: str) -> int:
     try:
         cur = conn.execute(
             """
-            INSERT INTO contacts (owner_user_id, name, whatsapp_number)
+            INSERT INTO contacts (owner_user_id, name, chat_id)
             VALUES (?, ?, ?)
-            ON CONFLICT(owner_user_id, name) DO UPDATE SET whatsapp_number = excluded.whatsapp_number
+            ON CONFLICT(owner_user_id, name) DO UPDATE SET chat_id = excluded.chat_id
             """,
-            (owner_user_id, name, whatsapp_number),
+            (owner_user_id, name, chat_id),
         )
         conn.commit()
         return _inserted_id(cur)
@@ -867,7 +867,7 @@ def list_contacts(owner_user_id: int) -> list[sqlite3.Row]:
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT name, whatsapp_number FROM contacts WHERE owner_user_id = ? ORDER BY name",
+            "SELECT name, chat_id FROM contacts WHERE owner_user_id = ? ORDER BY name",
             (owner_user_id,),
         )
         return cur.fetchall()
@@ -926,8 +926,8 @@ def get_due_reminders(now_utc_iso: str) -> list[sqlite3.Row]:
                    u.timezone,
                    u.display_name AS owner_display_name,
                    u.kid_facing_role AS owner_kid_facing_role,
-                   u.whatsapp_number AS owner_number,
-                   COALESCE(c.whatsapp_number, u.whatsapp_number) AS destination_number,
+                   u.chat_id AS owner_number,
+                   COALESCE(c.chat_id, u.chat_id) AS destination_number,
                    c.name AS recipient_name
             FROM reminders r
             JOIN users u ON u.id = r.user_id
@@ -1319,7 +1319,7 @@ def admin_list_users() -> list[sqlite3.Row]:
     try:
         cur = conn.execute(
             """
-            SELECT u.id, u.whatsapp_number, u.display_name, u.timezone, u.is_active, u.is_admin, u.created_at,
+            SELECT u.id, u.chat_id, u.display_name, u.timezone, u.is_active, u.is_admin, u.created_at,
                    (SELECT COUNT(*) FROM messages m WHERE m.user_id = u.id) AS message_count,
                    (SELECT COUNT(*) FROM reminders r WHERE r.user_id = u.id AND r.is_active = 1) AS active_reminders,
                    (SELECT MAX(m.created_at) FROM messages m WHERE m.user_id = u.id) AS last_message_at
@@ -1331,13 +1331,13 @@ def admin_list_users() -> list[sqlite3.Row]:
         conn.close()
 
 
-def admin_add_user(whatsapp_number: str, display_name: str) -> bool:
+def admin_add_user(chat_id: str, display_name: str) -> bool:
     """Adds a new user to the allowlist. Returns False if the number already exists."""
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO users (whatsapp_number, display_name, timezone) VALUES (?, ?, ?)",
-            (whatsapp_number, display_name, DEFAULT_TIMEZONE),
+            "INSERT INTO users (chat_id, display_name, timezone) VALUES (?, ?, ?)",
+            (chat_id, display_name, DEFAULT_TIMEZONE),
         )
         conn.commit()
         return True
@@ -1418,16 +1418,16 @@ def admin_message_totals() -> dict[str, int]:
         conn.close()
 
 
-def get_user_by_number_any_status(whatsapp_number: str) -> sqlite3.Row | None:
+def get_user_by_number_any_status(chat_id: str) -> sqlite3.Row | None:
     """
-    Like get_user_by_whatsapp_number but *including* disabled users.
+    Like get_user_by_chat_id but *including* disabled users.
     Needed for user management, to distinguish "this number does not exist" from
     "it exists but is disabled" (in which case it should be re-enabled rather
     than recreated).
     """
     conn = get_connection()
     try:
-        cur = conn.execute("SELECT * FROM users WHERE whatsapp_number = ?", (whatsapp_number,))
+        cur = conn.execute("SELECT * FROM users WHERE chat_id = ?", (chat_id,))
         return cur.fetchone()
     finally:
         conn.close()
@@ -1775,7 +1775,7 @@ def list_tracked_packages(user_id: int) -> list[sqlite3.Row]:
 def get_packages_due_for_check(cutoff_iso: str) -> list[sqlite3.Row]:
     """
     Every tracked package (across all users) not checked since cutoff_iso (or
-    never checked), joined with the owning user's whatsapp_number/timezone
+    never checked), joined with the owning user's chat_id/timezone
     for notification. Used by scheduler.check_and_notify_package_changes,
     called hourly - passing (now - 24h) as cutoff_iso naturally staggers each
     package to a once-a-day check from whenever it was first found/last
@@ -1790,7 +1790,7 @@ def get_packages_due_for_check(cutoff_iso: str) -> list[sqlite3.Row]:
             """
             SELECT tp.id, tp.user_id, tp.tracking_number, tp.courier_code, tp.description,
                    tp.last_status, tp.last_checked_at, tp.created_at,
-                   u.whatsapp_number, u.timezone
+                   u.chat_id, u.timezone
             FROM tracked_packages tp
             JOIN users u ON u.id = tp.user_id
             WHERE tp.last_checked_at IS NULL OR tp.last_checked_at <= ?
@@ -1855,7 +1855,7 @@ def list_active_watches(user_id: int) -> list[sqlite3.Row]:
 def get_watches_due_for_check(cutoff_iso: str) -> list[sqlite3.Row]:
     """
     Every active watch (across all users) not checked since cutoff_iso (or
-    never checked), joined with the owning user's whatsapp_number for
+    never checked), joined with the owning user's chat_id for
     notification - same shape and staggering behaviour as
     get_packages_due_for_check.
     """
@@ -1864,7 +1864,7 @@ def get_watches_due_for_check(cutoff_iso: str) -> list[sqlite3.Row]:
         cur = conn.execute(
             """
             SELECT w.id, w.user_id, w.watch_type, w.target, w.label, w.last_state,
-                   u.whatsapp_number
+                   u.chat_id
             FROM watches w
             JOIN users u ON u.id = w.user_id
             WHERE w.is_active = 1 AND (w.last_checked_at IS NULL OR w.last_checked_at <= ?)
@@ -2102,7 +2102,7 @@ def list_users_with_kids_schedule() -> list[sqlite3.Row]:
     try:
         return conn.execute(
             """
-            SELECT DISTINCT u.id AS user_id, u.whatsapp_number, u.timezone
+            SELECT DISTINCT u.id AS user_id, u.chat_id, u.timezone
             FROM users u JOIN kids_schedule k ON k.user_id = u.id
             """
         ).fetchall()
@@ -2110,15 +2110,15 @@ def list_users_with_kids_schedule() -> list[sqlite3.Row]:
         conn.close()
 
 
-def find_kid_schedule_owner_by_whatsapp_number(whatsapp_number: str) -> tuple[int, str] | None:
+def find_kid_schedule_owner_by_chat_id(chat_id: str) -> tuple[int, str] | None:
     """
     New feature (2026-09-15): lets a kid with their own registered bot
     account (e.g. a message from "נועה") ask about their OWN schedule, which
     is actually saved under a PARENT's account (the parent is the one who
-    ran action=set/set_week). Resolves by matching the kid's own WhatsApp
+    ran action=set/set_week). Resolves by matching the kid's own Telegram
     number against a contact a parent saved (see webhook_handler.
     _handle_kids_schedule's phone-number fallback) - every (owner_user_id,
-    contact name) pair whose whatsapp_number matches is tried in order until
+    contact name) pair whose chat_id matches is tried in order until
     one actually has saved kids_schedule rows, since the same kid is
     typically saved as a contact under BOTH parents' accounts (same name),
     and occasionally under more than one spelling (e.g. a leftover "Noa" next
@@ -2137,8 +2137,8 @@ def find_kid_schedule_owner_by_whatsapp_number(whatsapp_number: str) -> tuple[in
     conn = get_connection()
     try:
         candidates = conn.execute(
-            "SELECT DISTINCT owner_user_id, name FROM contacts WHERE whatsapp_number = ? ORDER BY owner_user_id",
-            (whatsapp_number,),
+            "SELECT DISTINCT owner_user_id, name FROM contacts WHERE chat_id = ? ORDER BY owner_user_id",
+            (chat_id,),
         ).fetchall()
         for row in candidates:
             has_rows = conn.execute(
@@ -2250,7 +2250,7 @@ def list_users_with_daily_meetings_summary_enabled() -> list[sqlite3.Row]:
     conn = get_connection()
     try:
         return conn.execute(
-            "SELECT id AS user_id, whatsapp_number, timezone, display_name, "
+            "SELECT id AS user_id, chat_id, timezone, display_name, "
             "daily_meetings_summary_time, daily_meetings_summary_last_sent_date "
             "FROM users WHERE daily_meetings_summary_enabled = 1 AND is_active = 1"
         ).fetchall()
@@ -2260,19 +2260,17 @@ def list_users_with_daily_meetings_summary_enabled() -> list[sqlite3.Row]:
 
 def list_reminder_delivery_failure_notification_numbers() -> list[str]:
     """
-    WhatsApp numbers of every user who should hear about a reminder to a
-    kid that genuinely, finally failed to deliver (2026-09-19) - both
-    parents, regardless of which of them created that specific reminder.
-    See check_and_send_reminders (the synchronous failure path) and
-    whatsapp.handle_delivery_status (the async 24h-window-retry-also-
-    failed path), which both notify everyone this returns.
+    Chat ids of every user who should hear about a reminder to a kid that
+    failed to deliver (2026-09-19) - both parents, regardless of which of
+    them created that specific reminder. See notify_reminder_delivery_failure
+    in scheduler.py, which notifies everyone this returns.
     """
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT whatsapp_number FROM users WHERE notify_on_reminder_delivery_failure = 1 AND is_active = 1"
+            "SELECT chat_id FROM users WHERE notify_on_reminder_delivery_failure = 1 AND is_active = 1"
         ).fetchall()
-        return [row["whatsapp_number"] for row in rows]
+        return [row["chat_id"] for row in rows]
     finally:
         conn.close()
 
@@ -2349,8 +2347,8 @@ def get_due_persistent_reminders(now_utc_iso: str) -> list[sqlite3.Row]:
             SELECT pr.id, pr.owner_user_id, pr.content, pr.retry_interval_minutes,
                    pr.max_attempts, pr.attempts_sent,
                    pr.schedule_type, pr.schedule_time, pr.schedule_days,
-                   c.name AS recipient_name, c.whatsapp_number AS recipient_whatsapp_number,
-                   u.whatsapp_number AS owner_whatsapp_number, u.display_name AS owner_display_name,
+                   c.name AS recipient_name, c.chat_id AS recipient_chat_id,
+                   u.chat_id AS owner_chat_id, u.display_name AS owner_display_name,
                    u.kid_facing_role AS owner_kid_facing_role,
                    u.timezone AS owner_timezone
             FROM persistent_reminders pr
@@ -2422,7 +2420,7 @@ def mark_persistent_reminder_done(reminder_id: int) -> bool:
     The recipient confirmed. No owner_user_id ownership check here (unlike
     most other mutations in this file) - the recipient confirming is by
     definition someone OTHER than the owner, resolved by matching their own
-    WhatsApp number to the contact on the row (see
+    Telegram chat id to the contact on the row (see
     find_pending_persistent_reminder_for_number), not by being its owner.
     Only affects a still-'pending' row, so a row already resolved (done/
     escalated/cancelled) can't be double-confirmed.
@@ -2518,15 +2516,15 @@ def cancel_persistent_reminder(reminder_id: int, owner_user_id: int) -> bool:
         conn.close()
 
 
-def find_pending_persistent_reminder_for_number(whatsapp_number: str, now_utc_iso: str) -> sqlite3.Row | None:
+def find_pending_persistent_reminder_for_number(chat_id: str, now_utc_iso: str) -> sqlite3.Row | None:
     """
-    The most recently created nagging reminder addressed to this WhatsApp
+    The most recently created nagging reminder addressed to this Telegram
     number that is CURRENTLY due/mid-cycle (next_trigger_at <= now), if
     any - what webhook_handler._check_task_confirmation checks before
     treating an incoming message as a possible "I did it" confirmation.
     Resolves by matching the recipient's own number against the contact
     row, the same phone-number-based technique
-    find_kid_schedule_owner_by_whatsapp_number already uses - a kid
+    find_kid_schedule_owner_by_chat_id already uses - a kid
     confirming is a registered user in their own right, not the owner of
     the reminder they're confirming.
 
@@ -2554,16 +2552,16 @@ def find_pending_persistent_reminder_for_number(whatsapp_number: str, now_utc_is
             SELECT pr.id, pr.content, pr.owner_user_id,
                    pr.schedule_type, pr.schedule_time, pr.schedule_days,
                    c.name AS recipient_name,
-                   u.whatsapp_number AS owner_whatsapp_number, u.display_name AS owner_display_name,
+                   u.chat_id AS owner_chat_id, u.display_name AS owner_display_name,
                    u.timezone AS owner_timezone
             FROM persistent_reminders pr
             JOIN contacts c ON c.id = pr.recipient_contact_id
             JOIN users u ON u.id = pr.owner_user_id
-            WHERE c.whatsapp_number = ? AND pr.status = 'pending' AND pr.next_trigger_at <= ?
+            WHERE c.chat_id = ? AND pr.status = 'pending' AND pr.next_trigger_at <= ?
             ORDER BY pr.created_at DESC, pr.id DESC
             LIMIT 1
             """,
-            (whatsapp_number, now_utc_iso),
+            (chat_id, now_utc_iso),
         ).fetchone()
     finally:
         conn.close()
@@ -2590,7 +2588,7 @@ def log_api_usage(provider: str, input_tokens: int | None = None, output_tokens:
 
 
 def log_shadow_classification(
-    whatsapp_message_id: str | None,
+    incoming_message_id: str | None,
     raw_content: str | None,
     old_intent: str,
     new_tool: str | None,
@@ -2608,10 +2606,10 @@ def log_shadow_classification(
         conn.execute(
             """
             INSERT INTO intent_shadow_log
-                (whatsapp_message_id, raw_content, old_intent, new_tool, new_args, error)
+                (incoming_message_id, raw_content, old_intent, new_tool, new_args, error)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (whatsapp_message_id, raw_content, old_intent, new_tool, new_args, error),
+            (incoming_message_id, raw_content, old_intent, new_tool, new_args, error),
         )
         conn.commit()
     finally:
@@ -2866,7 +2864,7 @@ def reserve_proactive_notification_slot(user_id: int, cap: int, category: str, s
     Returns the new row's id if reserved, or None if the cap was already
     reached by the time this ran (race or not) - the caller (see
     proactive.deliver_proactive_message) releases the row with
-    delete_proactive_notification_log_row if the WhatsApp send that follows
+    delete_proactive_notification_log_row if the Telegram send that follows
     ends up failing, so a failed attempt doesn't permanently waste a slot
     of the daily quota.
     """
@@ -2891,7 +2889,7 @@ def reserve_proactive_notification_slot(user_id: int, cap: int, category: str, s
 
 def delete_proactive_notification_log_row(row_id: int) -> None:
     """Releases a slot reserve_proactive_notification_slot reserved, when
-    the WhatsApp send that was supposed to follow it failed - see
+    the Telegram send that was supposed to follow it failed - see
     proactive.deliver_proactive_message."""
     conn = get_connection()
     try:

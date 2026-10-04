@@ -12,7 +12,7 @@ from src.db.models import (
 
 
 def test_defer_proactive_message_stores_a_row(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
 
     defer_proactive_message(1, "calendar_moved", "אירוע הוזז", identifier="boss@example.com")
 
@@ -25,7 +25,7 @@ def test_defer_proactive_message_stores_a_row(db_path, make_user):
 
 
 def test_defer_proactive_message_identifier_defaults_to_none(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
 
     defer_proactive_message(1, "meeting_prebrief", "פגישה בעוד 15 דקות")
 
@@ -34,8 +34,8 @@ def test_defer_proactive_message_identifier_defaults_to_none(db_path, make_user)
 
 
 def test_get_deferred_notifications_returns_only_that_users_rows(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000002")
+    make_user(chat_id="972500000001")
+    make_user(chat_id="972500000002")
 
     defer_proactive_message(1, "calendar_moved", "for user 1")
     defer_proactive_message(2, "calendar_moved", "for user 2")
@@ -46,7 +46,7 @@ def test_get_deferred_notifications_returns_only_that_users_rows(db_path, make_u
 
 
 def test_get_deferred_notifications_orders_by_created_at(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
 
     defer_proactive_message(1, "calendar_moved", "first")
     defer_proactive_message(1, "calendar_moved", "second")
@@ -57,7 +57,7 @@ def test_get_deferred_notifications_orders_by_created_at(db_path, make_user):
 
 
 def test_delete_deferred_notifications_removes_only_the_given_ids(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     defer_proactive_message(1, "calendar_moved", "keep me")
     defer_proactive_message(1, "calendar_moved", "delete me")
 
@@ -72,7 +72,7 @@ def test_delete_deferred_notifications_removes_only_the_given_ids(db_path, make_
 
 
 def test_delete_deferred_notifications_with_empty_list_is_a_no_op(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     defer_proactive_message(1, "calendar_moved", "keep me")
 
     delete_deferred_notifications([])

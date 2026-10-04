@@ -34,7 +34,7 @@ from src.db.models import (
 
 @pytest.fixture()
 def owner(make_user):
-    return make_user(whatsapp_number="972500000001")
+    return make_user(chat_id="972500000001")
 
 
 @pytest.fixture()
@@ -43,7 +43,7 @@ def attacker(make_user):
     member (Ronit/Gil/Or), which is the realistic threat model here: no
     unauthenticated user can reach these functions at all (14.2), so the
     question is whether one real user can touch another's data."""
-    return make_user(whatsapp_number="972500000002", display_name="Attacker")
+    return make_user(chat_id="972500000002", display_name="Attacker")
 
 
 def test_reminder_cannot_be_cancelled_by_another_user(owner, attacker):

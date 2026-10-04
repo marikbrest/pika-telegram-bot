@@ -64,7 +64,7 @@ Notes that matter:
 
 Unit-test the handler directly (see `tests/test_tool_batch*.py` for the pattern, with the
 `db_path` and `make_user` fixtures from `tests/conftest.py`). External services must be
-mocked - the suite never touches the network. Then try it end to end without WhatsApp:
+mocked - the suite never touches the network. Then try it end to end without Telegram:
 
 ```bash
 python scripts/chat.py

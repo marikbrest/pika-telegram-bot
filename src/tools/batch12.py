@@ -23,7 +23,7 @@ media message.
 webhook_handler._handle_kids_schedule's phone-number fallback) - a
 registered kid-user with no schedule of their own under their own account
 resolves to whatever their parent saved for them, found by matching the
-kid's own WhatsApp number against a contact a parent saved.
+kid's own Telegram chat id against a contact a parent saved.
 """
 from src.scheduler import _WEEKDAY_NAMES
 from src.tools.registry import Tool, register
@@ -84,7 +84,7 @@ manage_kids_schedule_tool = register(Tool(
                 "description": (
                     "The kid's name. Required for set/set_week/delete. Omit for list to show every "
                     "kid's saved schedule (or, for a kid asking about themselves, omit it too - the "
-                    "code resolves who they are from their own WhatsApp number)."
+                    "code resolves who they are from their own Telegram chat id)."
                 ),
             },
             "day_of_week": {

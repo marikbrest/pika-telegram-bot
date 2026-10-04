@@ -9,7 +9,7 @@ and calendar. This is what the software actually does, so you can tell your user
 | Data | Sent to | When |
 | --- | --- | --- |
 | The user's message, the last ≤10 messages from the past 24h, saved contact names, saved facts | Google Gemini API (or **OpenAI**, for users who chose it and only if you enabled it) | every message |
-| Photos, voice notes, PDFs the user sends | Meta (download) → Gemini | when sent |
+| Photos, voice notes, PDFs the user sends | Telegram (download) → Gemini | when sent |
 | Message text | Gemini embeddings API | stored for semantic search ("what did we say about X") |
 | Email subjects/bodies, calendar events | Gemini | only when the user asks about mail/calendar |
 | **Proactive mode only:** new-email sender + subject + Gmail's short snippet; upcoming calendar events | Gemini | opt-in, per user, polled in the background; detection and wording only |
@@ -17,7 +17,7 @@ and calendar. This is what the software actually does, so you can tell your user
 | Tracking numbers | Ship24 | package tracking |
 | City names | Open-Meteo | weather |
 | Ticker symbols | Yahoo Finance | quotes |
-| Reminder/alert text | Meta WhatsApp Cloud API | every outbound message |
+| Reminder/alert text | Telegram Bot API | every outbound message |
 
 If you enable OpenAI (`OPENAI_API_KEY` + `OPENAI_MODEL`), those users' content goes to OpenAI instead, with `store: false` (a request, not a
 guarantee); embeddings and image generation still use Gemini. The `/privacy` page and the welcome message name OpenAI automatically.

@@ -5,7 +5,7 @@ BigQuery export enabled the same day on the Gemini API key's own project
 018AA3-EFD7A9-6D2E58) - see webhook_handler._handle_usage_status for how
 this is presented alongside the existing token-based estimate.
 
-A dedicated service account (whatsapp-bot-billing-reader), not reused from
+A dedicated service account (pika-bot-billing-reader), not reused from
 anywhere else in this codebase: scoped to exactly two roles on this one
 project (BigQuery Data Viewer, BigQuery Job User) via its own JSON key
 (credentials/gcp_billing_service_account.json, gitignored) - it cannot read

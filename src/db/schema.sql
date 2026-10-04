@@ -2,7 +2,7 @@
 
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    whatsapp_number TEXT UNIQUE NOT NULL,
+    chat_id TEXT UNIQUE NOT NULL,
     display_name TEXT,
     timezone TEXT DEFAULT 'Asia/Jerusalem',
     preferred_tone TEXT DEFAULT 'neutral',
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS messages (
     message_type TEXT NOT NULL,
     raw_content TEXT,
     parsed_intent TEXT,
-    whatsapp_message_id TEXT UNIQUE,
+    incoming_message_id TEXT UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     owner_user_id INTEGER NOT NULL REFERENCES users(id),
     name TEXT NOT NULL,
-    whatsapp_number TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(owner_user_id, name)
 );

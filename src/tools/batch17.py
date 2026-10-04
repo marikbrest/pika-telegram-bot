@@ -81,7 +81,7 @@ def _validate_manage_vip_senders_args(args: dict) -> bool:
 manage_vip_senders_tool = register(Tool(
     name="manage_vip_senders",
     description=(
-        "Manages the user's own VIP list (email addresses or WhatsApp numbers) that bypass quiet hours "
+        "Manages the user's own VIP list (email addresses or Telegram chat ids) that bypass quiet hours "
         "and a temporary 'busy' status for proactive notifications - never the daily cap. Use for "
         "requests like 'תוסיף את דני ל-VIP', 'תוסיף את הגן של הילד כ-VIP', 'מי ברשימת ה-VIP שלי', "
         "'תסיר את X מה-VIP'."
@@ -93,7 +93,7 @@ manage_vip_senders_tool = register(Tool(
             "identifier": {
                 "type": "string",
                 "description": (
-                    "Only for action=add/remove: the email address or WhatsApp number. If the user "
+                    "Only for action=add/remove: the email address or Telegram chat id. If the user "
                     "only gave a name (e.g. 'תוסיף את דני ל-VIP'), pass the name as-is here - the "
                     "handler resolves it against the user's own saved contacts."
                 ),

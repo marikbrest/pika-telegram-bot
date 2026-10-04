@@ -2,7 +2,7 @@
 Three webhook_handler intents are restricted to is_admin=1 in application
 code, a SEPARATE authorization boundary from the admin dashboard's own
 Cloudflare-Access-header check (see test_security_admin_auth.py) - these
-run for an already-allowlisted WhatsApp user (14.2), gating only what a
+run for an already-allowlisted Telegram user (14.2), gating only what a
 non-admin family member is allowed to ask the bot for: internal
 infrastructure status, API cost, and bot-access management.
 """
@@ -11,18 +11,18 @@ from unittest.mock import patch
 
 import pytest
 
-from src.db.models import get_user_by_id, get_user_by_whatsapp_number, log_api_usage
+from src.db.models import get_user_by_id, get_user_by_chat_id, log_api_usage
 from src.webhook_handler import _handle_usage_status, _handle_user_manage, _handle_zabbix_status
 
 
 @pytest.fixture()
 def admin(make_user):
-    return {"id": make_user(whatsapp_number="972500000001", is_admin=True), "is_admin": True, "timezone": "Asia/Jerusalem"}
+    return {"id": make_user(chat_id="972500000001", is_admin=True), "is_admin": True, "timezone": "Asia/Jerusalem"}
 
 
 @pytest.fixture()
 def regular_user(make_user):
-    return {"id": make_user(whatsapp_number="972500000002", is_admin=False), "is_admin": False, "timezone": "Asia/Jerusalem"}
+    return {"id": make_user(chat_id="972500000002", is_admin=False), "is_admin": False, "timezone": "Asia/Jerusalem"}
 
 
 # ---- zabbix_status ----
@@ -114,43 +114,43 @@ def test_user_manage_list_shows_all_users(admin, regular_user):
     assert "972500000001" in reply and "972500000002" in reply
 
 
-def test_user_manage_add_normalizes_israeli_local_number(admin):
-    reply = _handle_user_manage(admin, {"action": "add", "whatsapp_number": "0501234567", "display_name": "Gil"})
-    assert "972501234567" in reply
-    assert get_user_by_whatsapp_number("972501234567") is not None
+def test_user_manage_add_strips_decoration_from_a_chat_id(admin):
+    reply = _handle_user_manage(admin, {"action": "add", "chat_id": " 123 456 789 ", "display_name": "Gil"})
+    assert "123456789" in reply
+    assert get_user_by_chat_id("123456789") is not None
 
 
 def test_user_manage_add_rejects_an_implausible_number(admin):
-    reply = _handle_user_manage(admin, {"action": "add", "whatsapp_number": "123", "display_name": "x"})
+    reply = _handle_user_manage(admin, {"action": "add", "chat_id": "123", "display_name": "x"})
     assert "לא נראה תקין" in reply
 
 
 def test_user_manage_add_reactivates_a_previously_disabled_user(admin, make_user):
-    user_id = make_user(whatsapp_number="972500000009", is_active=False)
-    reply = _handle_user_manage(admin, {"action": "add", "whatsapp_number": "972500000009"})
+    user_id = make_user(chat_id="972500000009", is_active=False)
+    reply = _handle_user_manage(admin, {"action": "add", "chat_id": "972500000009"})
     assert "הפעלתי מחדש" in reply
     assert get_user_by_id(user_id)["is_active"] == 1
 
 
 def test_user_manage_add_refuses_a_number_already_active(admin, regular_user):
-    reply = _handle_user_manage(admin, {"action": "add", "whatsapp_number": "972500000002"})
+    reply = _handle_user_manage(admin, {"action": "add", "chat_id": "972500000002"})
     assert "כבר משתמש פעיל" in reply
 
 
 def test_user_manage_disable_refuses_to_lock_out_the_calling_admin(admin):
     """The one safety property this handler exists specifically to protect,
     per its own docstring: an admin cannot disable themselves."""
-    reply = _handle_user_manage(admin, {"action": "disable", "whatsapp_number": "972500000001"})
+    reply = _handle_user_manage(admin, {"action": "disable", "chat_id": "972500000001"})
     assert "לא אשבית אותך" in reply
     assert get_user_by_id(admin["id"])["is_active"] == 1
 
 
 def test_user_manage_disable_works_on_someone_else(admin, regular_user):
-    reply = _handle_user_manage(admin, {"action": "disable", "whatsapp_number": "972500000002"})
+    reply = _handle_user_manage(admin, {"action": "disable", "chat_id": "972500000002"})
     assert "כבר לא יכול להשתמש" in reply
     assert get_user_by_id(regular_user["id"])["is_active"] == 0
 
 
 def test_user_manage_disable_unknown_number_says_so(admin):
-    reply = _handle_user_manage(admin, {"action": "disable", "whatsapp_number": "972599999999"})
+    reply = _handle_user_manage(admin, {"action": "disable", "chat_id": "972599999999"})
     assert "לא מצאתי משתמש" in reply

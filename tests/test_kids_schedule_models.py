@@ -9,7 +9,7 @@ list_users_with_kids_schedule.
 from src.db.models import (
     MAX_KIDS_SCHEDULE_ROWS_PER_USER,
     delete_kid_schedule_day,
-    find_kid_schedule_owner_by_whatsapp_number,
+    find_kid_schedule_owner_by_chat_id,
     get_kid_schedule,
     get_kids_schedule_for_day,
     list_users_with_kids_schedule,
@@ -45,8 +45,8 @@ def test_get_kid_schedule_scopes_by_kid_name(db_path, make_user):
 
 
 def test_get_kid_schedule_scopes_by_user(db_path, make_user):
-    user_a = make_user(whatsapp_number="972500000001")
-    user_b = make_user(whatsapp_number="972500000002")
+    user_a = make_user(chat_id="972500000001")
+    user_b = make_user(chat_id="972500000002")
     upsert_kid_schedule_day(user_a, "דני", "mon", "חשבון")
     assert get_kid_schedule(user_b, "דני") == []
 
@@ -99,48 +99,48 @@ def test_get_kids_schedule_for_day_groups_multiple_kids(db_path, make_user):
 
 
 def test_list_users_with_kids_schedule_only_includes_users_who_saved_something(db_path, make_user):
-    user_with = make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000002")  # never saves anything
+    user_with = make_user(chat_id="972500000001")
+    make_user(chat_id="972500000002")  # never saves anything
     upsert_kid_schedule_day(user_with, "דני", "mon", "חשבון")
 
     users = list_users_with_kids_schedule()
     assert [u["user_id"] for u in users] == [user_with]
-    assert users[0]["whatsapp_number"] == "972500000001"
+    assert users[0]["chat_id"] == "972500000001"
 
 
-def test_find_kid_schedule_owner_by_whatsapp_number_resolves_a_matching_contact(db_path, make_user):
-    parent_id = make_user(whatsapp_number="972500000001")
+def test_find_kid_schedule_owner_by_chat_id_resolves_a_matching_contact(db_path, make_user):
+    parent_id = make_user(chat_id="972500000001")
     kid_number = "972500000072"
     save_contact(parent_id, "נועה", kid_number)
     upsert_kid_schedule_day(parent_id, "נועה", "mon", "חשבון")
 
-    match = find_kid_schedule_owner_by_whatsapp_number(kid_number)
+    match = find_kid_schedule_owner_by_chat_id(kid_number)
     assert match == (parent_id, "נועה")
 
 
 def test_find_kid_schedule_owner_returns_none_when_no_contact_matches(db_path):
-    assert find_kid_schedule_owner_by_whatsapp_number("972500000099") is None
+    assert find_kid_schedule_owner_by_chat_id("972500000099") is None
 
 
 def test_find_kid_schedule_owner_returns_none_when_contact_exists_but_no_schedule_saved(db_path, make_user):
-    parent_id = make_user(whatsapp_number="972500000001")
+    parent_id = make_user(chat_id="972500000001")
     kid_number = "972500000072"
     save_contact(parent_id, "נועה", kid_number)
     # no upsert_kid_schedule_day call - contact exists, but nothing saved yet
 
-    assert find_kid_schedule_owner_by_whatsapp_number(kid_number) is None
+    assert find_kid_schedule_owner_by_chat_id(kid_number) is None
 
 
 def test_find_kid_schedule_owner_prefers_a_match_that_actually_has_data(db_path, make_user):
     """Same kid saved under two different owners/spellings (e.g. Yossi's old
     'Or' contact next to a newer 'נועה') - only the one with real data resolves."""
-    parent_a = make_user(whatsapp_number="972500000001")
-    parent_b = make_user(whatsapp_number="972500000002")
+    parent_a = make_user(chat_id="972500000001")
+    parent_b = make_user(chat_id="972500000002")
     kid_number = "972500000072"
 
     save_contact(parent_a, "Or", kid_number)  # no schedule saved for this spelling
     save_contact(parent_b, "נועה", kid_number)
     upsert_kid_schedule_day(parent_b, "נועה", "mon", "חשבון")
 
-    match = find_kid_schedule_owner_by_whatsapp_number(kid_number)
+    match = find_kid_schedule_owner_by_chat_id(kid_number)
     assert match == (parent_b, "נועה")

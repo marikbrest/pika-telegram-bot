@@ -18,7 +18,7 @@ import json
 import threading
 
 
-def _run(user: dict, text_body: str, whatsapp_message_id: str, old_intent: str) -> None:
+def _run(user: dict, text_body: str, incoming_message_id: str, old_intent: str) -> None:
     # Late imports, deliberately not at module top level: src.tools.pilot
     # imports _handle_weather/_handle_market/_handle_task_manage FROM
     # webhook_handler.py, and THIS module is imported BY webhook_handler.py
@@ -48,7 +48,7 @@ def _run(user: dict, text_body: str, whatsapp_message_id: str, old_intent: str) 
 
     try:
         log_shadow_classification(
-            whatsapp_message_id=whatsapp_message_id,
+            incoming_message_id=incoming_message_id,
             raw_content=text_body,
             old_intent=old_intent,
             new_tool=new_tool,
@@ -59,12 +59,12 @@ def _run(user: dict, text_body: str, whatsapp_message_id: str, old_intent: str) 
         print(f"[shadow] logging the comparison itself failed (non-fatal): {e}")
 
 
-def run_shadow_classification(user: dict, text_body: str, whatsapp_message_id: str, old_intent: str) -> None:
+def run_shadow_classification(user: dict, text_body: str, incoming_message_id: str, old_intent: str) -> None:
     """
     Fire-and-forget. Never raises into the caller and never blocks it - the
     actual Gemini call happens on the spawned thread, not here, so this
     returns immediately regardless of how long classification takes.
     """
     threading.Thread(
-        target=_run, args=(user, text_body, whatsapp_message_id, old_intent), daemon=True
+        target=_run, args=(user, text_body, incoming_message_id, old_intent), daemon=True
     ).start()

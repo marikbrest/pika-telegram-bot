@@ -8,13 +8,13 @@ from src.webhook_handler import _handle_manage_proactive_settings, _handle_manag
 
 
 def _user(user_id=1):
-    return {"id": user_id, "whatsapp_number": "972500000001", "timezone": "Asia/Jerusalem"}
+    return {"id": user_id, "chat_id": "972500000001", "timezone": "Asia/Jerusalem"}
 
 
 # ===== manage_proactive_settings =====
 
 def test_enable_creates_a_settings_row_with_defaults(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     reply = _handle_manage_proactive_settings(_user(), {"action": "enable"})
 
     settings = get_proactive_settings(1)
@@ -26,7 +26,7 @@ def test_enable_creates_a_settings_row_with_defaults(db_path, make_user):
 
 
 def test_disable_after_enable(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_proactive_settings(_user(), {"action": "enable"})
     reply = _handle_manage_proactive_settings(_user(), {"action": "disable"})
 
@@ -35,13 +35,13 @@ def test_disable_after_enable(db_path, make_user):
 
 
 def test_status_when_never_enabled(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     reply = _handle_manage_proactive_settings(_user(), {"action": "status"})
     assert "כבוי" in reply
 
 
 def test_status_when_enabled_shows_settings(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_proactive_settings(_user(), {"action": "enable"})
     reply = _handle_manage_proactive_settings(_user(), {"action": "status"})
     assert "22:30" in reply
@@ -51,7 +51,7 @@ def test_status_when_enabled_shows_settings(db_path, make_user):
 
 
 def test_set_status_sets_a_future_quiet_until(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_proactive_settings(_user(), {"action": "enable"})
     reply = _handle_manage_proactive_settings(_user(), {"action": "set_status", "minutes": 60})
 
@@ -66,7 +66,7 @@ def test_set_status_without_minutes_asks_for_it():
 
 
 def test_clear_status(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_proactive_settings(_user(), {"action": "enable"})
     _handle_manage_proactive_settings(_user(), {"action": "set_status", "minutes": 60})
     _handle_manage_proactive_settings(_user(), {"action": "clear_status"})
@@ -75,7 +75,7 @@ def test_clear_status(db_path, make_user):
 
 
 def test_set_quiet_hours(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_proactive_settings(_user(), {"action": "enable"})
     reply = _handle_manage_proactive_settings(
         _user(), {"action": "set_quiet_hours", "start": "23:00", "end": "06:00"},
@@ -88,7 +88,7 @@ def test_set_quiet_hours(db_path, make_user):
 
 
 def test_set_daily_cap(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_proactive_settings(_user(), {"action": "enable"})
     reply = _handle_manage_proactive_settings(_user(), {"action": "set_daily_cap", "cap": 3})
 
@@ -97,7 +97,7 @@ def test_set_daily_cap(db_path, make_user):
 
 
 def test_set_meeting_lead_time(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_proactive_settings(_user(), {"action": "enable"})
     reply = _handle_manage_proactive_settings(_user(), {"action": "set_meeting_lead_time", "lead_minutes": 10})
 
@@ -113,7 +113,7 @@ def test_set_meeting_lead_time_without_a_value_asks_for_it():
 # ===== manage_vip_senders =====
 
 def test_add_vip_sender(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     reply = _handle_manage_vip_senders(_user(), {"action": "add", "identifier": "boss@example.com", "label": "בוס"})
 
     vips = list_vip_senders(1)
@@ -124,20 +124,20 @@ def test_add_vip_sender(db_path, make_user):
 
 
 def test_list_vip_senders_empty(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     reply = _handle_manage_vip_senders(_user(), {"action": "list"})
     assert "אין לך" in reply
 
 
 def test_list_vip_senders_with_entries(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_vip_senders(_user(), {"action": "add", "identifier": "boss@example.com"})
     reply = _handle_manage_vip_senders(_user(), {"action": "list"})
     assert "boss@example.com" in reply
 
 
 def test_remove_vip_sender(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_vip_senders(_user(), {"action": "add", "identifier": "boss@example.com"})
     reply = _handle_manage_vip_senders(_user(), {"action": "remove", "identifier": "boss@example.com"})
 
@@ -146,7 +146,7 @@ def test_remove_vip_sender(db_path, make_user):
 
 
 def test_remove_a_vip_that_does_not_exist(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     reply = _handle_manage_vip_senders(_user(), {"action": "remove", "identifier": "nobody@example.com"})
     assert "לא מצאתי" in reply
 
@@ -157,7 +157,7 @@ def test_add_vip_resolves_a_bare_name_from_contacts(db_path, make_user):
     incoming sender. Must resolve against the user's own saved contacts."""
     from src.db.models import save_contact
 
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     save_contact(1, "רונית", "972500000002")
 
     reply = _handle_manage_vip_senders(_user(), {"action": "add", "identifier": "רונית"})
@@ -170,7 +170,7 @@ def test_add_vip_resolves_a_bare_name_from_contacts(db_path, make_user):
 
 
 def test_add_vip_with_an_unknown_name_asks_for_a_real_identifier(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     reply = _handle_manage_vip_senders(_user(), {"action": "add", "identifier": "מישהו לא מוכר"})
 
     assert list_vip_senders(1) == []
@@ -178,7 +178,7 @@ def test_add_vip_with_an_unknown_name_asks_for_a_real_identifier(db_path, make_u
 
 
 def test_add_vip_with_a_real_email_does_not_touch_contacts(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     _handle_manage_vip_senders(_user(), {"action": "add", "identifier": "boss@example.com"})
 
     assert list_vip_senders(1)[0]["identifier"] == "boss@example.com"
@@ -187,7 +187,7 @@ def test_add_vip_with_a_real_email_does_not_touch_contacts(db_path, make_user):
 def test_remove_vip_resolves_a_bare_name_too(db_path, make_user):
     from src.db.models import save_contact
 
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     save_contact(1, "רונית", "972500000002")
     _handle_manage_vip_senders(_user(), {"action": "add", "identifier": "רונית"})
 
@@ -198,8 +198,8 @@ def test_remove_vip_resolves_a_bare_name_too(db_path, make_user):
 
 
 def test_vip_lists_are_isolated_per_owner(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000002")
+    make_user(chat_id="972500000001")
+    make_user(chat_id="972500000002")
     _handle_manage_vip_senders(_user(1), {"action": "add", "identifier": "boss@example.com"})
 
     assert len(list_vip_senders(1)) == 1

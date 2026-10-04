@@ -24,7 +24,7 @@ from src.db.models import init_db
 from src.legal_pages import privacy_html, terms_html
 from src.oauth_handler import router as oauth_router
 from src.scheduler import start_scheduler_loop
-from src.webhook_handler import router as webhook_router
+from src.telegram_handler import router as telegram_router, start_telegram_intake
 
 # 2026-09-26: single-instance guard, found necessary after a REAL live
 # incident - two full copies of this process ended up running at once
@@ -37,7 +37,7 @@ from src.webhook_handler import router as webhook_router
 # because start_scheduler_loop() below runs at IMPORT time, unconditionally,
 # before uvicorn's own socket bind even happens - so the loser still got a
 # fully independent scheduler and used it to send at least one real
-# WhatsApp message (a Google-reconnect alert) with no trace anywhere an
+# Telegram message (a Google-reconnect alert) with no trace anywhere an
 # operator would think to look.
 #
 # _SINGLE_INSTANCE_LOCK_PORT is bound synchronously via a plain socket
@@ -63,16 +63,19 @@ except OSError:
     )
     sys.exit(1)
 
-app = FastAPI(title="Personal Assistant — WhatsApp")
+app = FastAPI(title="Personal Assistant — Telegram")
 
 init_db()
 
-app.include_router(webhook_router)
+app.include_router(telegram_router)
 app.include_router(oauth_router)
 app.include_router(admin_router)
 
 # Starts the background reminder check (every 60 seconds) - PRD section 12.2
 _scheduler = start_scheduler_loop()
+
+# Long polling (default) or webhook registration - see src/telegram_handler.py
+start_telegram_intake()
 
 
 @app.get("/")
@@ -87,13 +90,13 @@ def _about_html() -> str:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Personal WhatsApp Assistant</title>
+<title>Personal Telegram Assistant</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>body{{font-family:sans-serif;max-width:640px;margin:40px auto;padding:0 16px;line-height:1.6}}</style>
 </head>
 <body>
-<h1>Personal WhatsApp Assistant</h1>
-<p>A private WhatsApp bot for one family - reminders, calendar and email management,
+<h1>Personal Telegram Assistant</h1>
+<p>A private Telegram bot for one family - reminders, calendar and email management,
 and proactive updates. Not a public app and not open for sign-up - it only serves the
 family members the admin has personally added.</p>
 <p>Questions: <a href="mailto:{contact}">{contact}</a></p>

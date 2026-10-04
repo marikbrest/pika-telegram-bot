@@ -16,7 +16,7 @@ def user(make_user):
 
 @pytest.fixture()
 def other_user(make_user):
-    return {"id": make_user(whatsapp_number="972500000002", display_name="Other")}
+    return {"id": make_user(chat_id="972500000002", display_name="Other")}
 
 
 def test_add_creates_item_and_confirms(user):

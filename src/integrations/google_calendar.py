@@ -21,7 +21,7 @@ from src.i18n import t
 def format_events_for_reply(events: list, timezone_name: str) -> str:
     """
     Formats a list of events (from list_events) as readable text (in the current locale) for
-    WhatsApp. Never goes through Gemini - this is factual data, not a guess,
+    Telegram. Never goes through Gemini - this is factual data, not a guess,
     so it is formatted directly in code.
     """
     if not events:

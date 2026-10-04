@@ -1,9 +1,9 @@
-# CLAUDE.md - Pika, a self-hosted WhatsApp assistant (Gemini)
+# CLAUDE.md - Pika, a self-hosted Telegram assistant (Gemini)
 
 Read this first. It tells you what to do depending on what the person asked for. Details live in
 [README.md](./README.md) and [docs/](./docs); do not duplicate them, follow them.
 
-**Never ask for, print, paste or commit secrets** (WhatsApp token, app secret, Gemini key, Google client secret,
+**Never ask for, print, paste or commit secrets** (Telegram bot token, webhook secret, Gemini key, Google client secret,
 `TOKEN_ENCRYPTION_KEY`). The person edits `.env` themselves; you tell them which variable goes where. Never read
 `.env` back into the conversation.
 
@@ -11,7 +11,7 @@ Read this first. It tells you what to do depending on what the person asked for.
 
 Work in this order and stop at the first failure (each step is checkable):
 
-1. **Try without WhatsApp (2 minutes).** Needs only a Gemini key. Python 3.12+.
+1. **Try without Telegram (2 minutes).** Needs only a Gemini key. Python 3.12+.
    ```bash
    pip install -r requirements.txt
    echo "GEMINI_API_KEY=their-key" > .env      # they type the key, you do not
@@ -19,21 +19,20 @@ Work in this order and stop at the first failure (each step is checkable):
    ```
    `chat.py` runs the real message pipeline against a throwaway sandbox DB. Calendar/Gmail/Drive are unavailable there.
 2. **Real setup.** `cp .env.example .env`, then ask them to fill it in. Explain each variable from `.env.example`.
-   Meta/WhatsApp is the long part: walk them through [docs/SETUP_META.md](./docs/SETUP_META.md) (it is the guide;
-   menu names drift, say so). Generate `TOKEN_ENCRYPTION_KEY` with the command in `.env.example`.
+   Telegram is quick: walk them through [docs/SETUP_TELEGRAM.md](./docs/SETUP_TELEGRAM.md) (create the bot with @BotFather,
+   paste the token; polling mode needs no public URL). Generate `TOKEN_ENCRYPTION_KEY` with the command in `.env.example`.
 3. **Validate** after every `.env` change: `python scripts/doctor.py` (offline), then
-   `python scripts/doctor.py --online --url https://<their-domain>` once the bot is reachable. Fix every `FAIL`. Read the
+   `python scripts/doctor.py --online` once the token is set. Fix every `FAIL`. Read the
    `WARN`s aloud to the person - two matter before inviting anyone: `OPERATOR_NAME` / `ADMIN_CONTACT_EMAIL` unset
    (placeholders would show on the public `/privacy` and `/terms` pages) and the Gemini plan (see below).
-4. **Run:** Docker `docker compose up -d --build` (then `docker compose run --rm bot python scripts/create_admin.py <number> "<name>"`),
+4. **Run:** Docker `docker compose up -d --build` (then `docker compose run --rm bot python scripts/create_admin.py <chat id> "<name>"`),
    or `python -m uvicorn src.main:app --host 127.0.0.1 --port 8000`. Create the first admin with
-   `python scripts/create_admin.py 972501234567 "Name"` (digits only, international format, no `+`).
-5. **Public HTTPS URL** for the webhook (Cloudflare Tunnel is the documented path; the compose file has a `tunnel` profile).
-6. **Adding people** needs TWO approvals: Meta's recipient list (while the app is in development mode) AND the bot's
-   own allowlist. See "Adding a person" in docs/SETUP_META.md. A message from a number that is not a user is silently ignored.
-7. **Templates:** anything sent more than 24 h after the user's last message needs an approved Meta template
-   (`reminder_notification`, `package_status_update`, `google_reconnect_needed`, `proactive_update`, `welcome_user`;
-   parameter counts in the README table). Mention it; do not fake approval.
+   `python scripts/create_admin.py 123456789 "Name"` (their Telegram chat id: digits only; @userinfobot shows it).
+5. **Public HTTPS URL** is only needed for Google sign-in, the `/privacy` page and webhook mode (Cloudflare Tunnel is the documented path;
+   the compose file has a `tunnel` profile). Plain Telegram chat works with long polling and no URL.
+6. **Adding people:** each person opens the bot and presses **Start** (the bot tells them their chat id), then the admin adds that id.
+   See "Adding a person" in docs/SETUP_TELEGRAM.md. A message from a chat that is not a user is ignored.
+7. There are no message templates and no 24-hour window on Telegram: everything the bot sends is plain text.
 
 ### Things to tell the person before they invite anyone else
 
@@ -47,7 +46,6 @@ Work in this order and stop at the first failure (each step is checkable):
   users' content; `/privacy` updates itself, but tell the person.
 - Google OAuth consent screen left in *Testing* expires refresh tokens every 7 days; publish it to *Production*.
 - Replies composed by the code follow `LOCALE` (`he` default, `en` supported; catalogs in `src/locales/`). If they switch,
-  also set `WHATSAPP_TEMPLATE_LANGUAGE` and approve the templates in that language; `doctor.py` warns when the two differ.
   The admin dashboard and the model's own classification prompts are still Hebrew.
 
 ## B. The person wants to CHANGE the code
@@ -99,5 +97,5 @@ CI runs all three on Python 3.12/3.13/3.14 plus a Docker smoke test and CodeQL. 
 ## C. The person has a QUESTION
 
 Answer from README / docs. Costs: [docs/COSTS.md](./docs/COSTS.md). Failures: [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) and `doctor.py`. Roadmap and
-open work: [ROADMAP.md](./ROADMAP.md) and the issues. If something is not documented or you are unsure whether Meta's UI still matches the
+open work: [ROADMAP.md](./ROADMAP.md) and the issues. If something is not documented or you are unsure whether BotFather's or Telegram's behaviour still matches the
 guide, say so instead of guessing.

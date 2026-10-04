@@ -1,8 +1,8 @@
 # Getting help
 
 - **Setup problems:** run `python scripts/doctor.py` first, then see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
-- **Questions and ideas:** open a [discussion](https://github.com/marikbrest/pika-personal-whatsapp-bot/discussions)
-  or an [issue](https://github.com/marikbrest/pika-personal-whatsapp-bot/issues).
+- **Questions and ideas:** open a [discussion](https://github.com/marikbrest/pika-telegram-bot/discussions)
+  or an [issue](https://github.com/marikbrest/pika-telegram-bot/issues).
 - **Bugs:** open an issue with what you did, what you expected, and the relevant log lines
   (remove phone numbers, tokens and message contents first).
 - **Security problems:** do not open a public issue; follow [SECURITY.md](./SECURITY.md).

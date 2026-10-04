@@ -42,7 +42,7 @@ def test_reminder_tool_dispatches_to_the_real_handler(monkeypatch):
 def test_reminder_tool_falls_back_to_fallback_reply_when_reply_text_missing(monkeypatch):
     """Gemini's own schema compliance isn't literally guaranteed (same
     reasoning dispatch.py already applies elsewhere) - a missing reply_text
-    must not send an empty WhatsApp message."""
+    must not send an empty Telegram message."""
     import src.tools.batch4 as batch4
     from src.intent_parser import FALLBACK_REPLY
 
@@ -58,7 +58,7 @@ def test_add_contact_tool_dispatches_to_the_real_handler(monkeypatch):
     import src.tools.batch4 as batch4
 
     monkeypatch.setattr(batch4, "_handle_add_contact", lambda user, contact, reply_text: f"contact reply: {reply_text}")
-    reply = execute_tool(add_contact_tool, {"id": 1}, {"name": "Dani", "whatsapp_number": "972501234567", "reply_text": "saved!"})
+    reply = execute_tool(add_contact_tool, {"id": 1}, {"name": "Dani", "chat_id": "972501234567", "reply_text": "saved!"})
     assert reply == "contact reply: saved!"
 
 
@@ -85,7 +85,7 @@ def test_validate_reminder_args_matches_intent_parser_rules(args, expected):
 @pytest.mark.parametrize(
     "args,expected",
     [
-        ({"name": "Dani", "whatsapp_number": "972501234567"}, True),
+        ({"name": "Dani", "chat_id": "972501234567"}, True),
         ({"name": "Dani"}, False),
         ({}, False),
     ],
@@ -197,7 +197,7 @@ def test_handle_reminder_with_multiple_recipients_refuses_entirely_if_any_unknow
 
 def test_handle_add_contact_saves_and_returns_reply_text(db_path, make_user):
     user = {"id": make_user()}
-    reply = _handle_add_contact(user, {"name": "Dani", "whatsapp_number": "972501234567"}, "נשמר!")
+    reply = _handle_add_contact(user, {"name": "Dani", "chat_id": "972501234567"}, "נשמר!")
 
     assert reply == "נשמר!"
     from src.db.models import get_contact_by_name

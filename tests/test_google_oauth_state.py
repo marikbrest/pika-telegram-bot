@@ -1,6 +1,6 @@
 """
 OAuth "state" is the only thing binding a Google consent callback back to a
-specific WhatsApp user - there is no conventional web session here. It is
+specific Telegram user - there is no conventional web session here. It is
 Fernet-encrypted (tamper-evident + self-expiring), which is the property
 these tests exist to prove actually holds, not just assume from the
 docstring.

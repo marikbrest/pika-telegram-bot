@@ -1,7 +1,7 @@
 """
 _handle_generate_image / _handle_edit_image / _handle_send_feature_request
 (2026-09-26) - image generation/editing, and the "notify the developer about
-an unsupported request" escape hatch. Mocks the Gemini/WhatsApp integration
+an unsupported request" escape hatch. Mocks the Gemini/Telegram integration
 calls directly (patched at src.webhook_handler, where they were imported -
 same convention as e.g. test_calendar_attendee_family_members.py patching
 src.webhook_handler.create_event), and uses real DB fixtures for anything
@@ -13,8 +13,8 @@ from src.db.models import get_pending_image_upload, save_pending_image_upload
 from src.webhook_handler import _handle_edit_image, _handle_generate_image, _handle_send_feature_request
 
 
-def _user(user_id=1, whatsapp_number="972500000001", display_name="יוסי"):
-    return {"id": user_id, "whatsapp_number": whatsapp_number, "display_name": display_name, "timezone": "Asia/Jerusalem"}
+def _user(user_id=1, chat_id="972500000001", display_name="יוסי"):
+    return {"id": user_id, "chat_id": chat_id, "display_name": display_name, "timezone": "Asia/Jerusalem"}
 
 
 # ===== _handle_generate_image =====
@@ -57,7 +57,7 @@ def test_generate_image_reports_failure_when_sending_fails():
 # ===== _handle_edit_image =====
 
 def test_edit_image_downloads_edits_and_sends(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     save_pending_image_upload(1, "media-id-1", "image/jpeg")
 
     with patch("src.webhook_handler.download_media", return_value=(b"original", "image/jpeg")) as mock_dl, \
@@ -74,7 +74,7 @@ def test_edit_image_downloads_edits_and_sends(db_path, make_user):
 
 
 def test_edit_image_with_no_pending_upload_asks_to_send_a_photo(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     with patch("src.webhook_handler.download_media") as mock_dl:
         reply = _handle_edit_image(_user(), {"instructions": "make it black and white"})
 
@@ -83,7 +83,7 @@ def test_edit_image_with_no_pending_upload_asks_to_send_a_photo(db_path, make_us
 
 
 def test_edit_image_reports_failure_when_the_original_download_fails(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     save_pending_image_upload(1, "media-id-1", "image/jpeg")
 
     with patch("src.webhook_handler.download_media", return_value=None), \
@@ -96,7 +96,7 @@ def test_edit_image_reports_failure_when_the_original_download_fails(db_path, ma
 
 
 def test_edit_image_reports_failure_when_the_edit_call_fails(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     save_pending_image_upload(1, "media-id-1", "image/jpeg")
 
     with patch("src.webhook_handler.download_media", return_value=(b"original", "image/jpeg")), \
@@ -111,9 +111,9 @@ def test_edit_image_reports_failure_when_the_edit_call_fails(db_path, make_user)
 # ===== _handle_send_feature_request =====
 
 def test_send_feature_request_notifies_every_admin_only(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי", is_admin=True)
-    make_user(whatsapp_number="972500000002", display_name="רונית", is_admin=False)
-    make_user(whatsapp_number="972500000003", display_name="Admin2", is_admin=True)
+    make_user(chat_id="972500000001", display_name="יוסי", is_admin=True)
+    make_user(chat_id="972500000002", display_name="רונית", is_admin=False)
+    make_user(chat_id="972500000003", display_name="Admin2", is_admin=True)
 
     with patch("src.webhook_handler.send_text_message") as mock_send:
         reply = _handle_send_feature_request(_user(2, "972500000002", "רונית"), {"request_text": "voice replies"})
@@ -138,8 +138,8 @@ def test_send_feature_request_with_no_text_asks_again():
 def test_send_feature_request_isolates_a_single_admin_send_failure(db_path, make_user):
     """Per-admin error isolation (12.3) - one admin's broken connection must
     never hide the request from the others."""
-    make_user(whatsapp_number="972500000001", display_name="Admin1", is_admin=True)
-    make_user(whatsapp_number="972500000002", display_name="Admin2", is_admin=True)
+    make_user(chat_id="972500000001", display_name="Admin1", is_admin=True)
+    make_user(chat_id="972500000002", display_name="Admin2", is_admin=True)
 
     with patch("src.webhook_handler.send_text_message", side_effect=[RuntimeError("boom"), True]) as mock_send:
         reply = _handle_send_feature_request(_user(), {"request_text": "voice replies"})

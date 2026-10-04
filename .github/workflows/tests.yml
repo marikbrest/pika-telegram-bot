@@ -53,10 +53,9 @@ jobs:
         run: |
           KEY=$(docker run --rm pika-smoke python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
           docker run -d --name pika -p 8000:8000 \
-            -e WHATSAPP_ACCESS_TOKEN=x -e WHATSAPP_PHONE_NUMBER_ID=1 -e WHATSAPP_WEBHOOK_VERIFY_TOKEN=v \
-            -e WHATSAPP_APP_SECRET=s -e GEMINI_API_KEY=x -e TOKEN_ENCRYPTION_KEY="$KEY" pika-smoke
+            -e TELEGRAM_BOT_TOKEN=x -e GEMINI_API_KEY=x -e TOKEN_ENCRYPTION_KEY="$KEY" pika-smoke
           for i in $(seq 1 20); do curl -fs localhost:8000/ && break; sleep 2; done
           curl -fs localhost:8000/ | grep -q '"status":"ok"'
-          docker exec pika python scripts/create_admin.py 972500000001 "CI Admin"
+          docker exec pika python scripts/create_admin.py 100000001 "CI Admin"
           docker exec pika python scripts/doctor.py || true
           docker logs pika | tail -5

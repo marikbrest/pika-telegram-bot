@@ -2,7 +2,7 @@
 Checks your Pika setup and tells you what is missing or broken.
 
     python scripts/doctor.py                       # offline checks (config, DB, keys)
-    python scripts/doctor.py --online              # + Gemini key and WhatsApp token
+    python scripts/doctor.py --online              # + Gemini key and Telegram token
     python scripts/doctor.py --url https://assistant.example.com   # + public webhook handshake
 
 Exit code is 0 only when nothing failed (warnings are fine).
@@ -34,10 +34,7 @@ def env(name: str) -> str:
 
 def check_required_env() -> None:
     for name, hint in [
-        ("WHATSAPP_ACCESS_TOKEN", "Meta > WhatsApp > API Setup (use a permanent System User token for production)"),
-        ("WHATSAPP_PHONE_NUMBER_ID", "Meta > WhatsApp > API Setup"),
-        ("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "any random string; the same value goes into Meta's webhook config"),
-        ("WHATSAPP_APP_SECRET", "Meta app > Settings > Basic > App Secret (webhook signatures are rejected without it)"),
+        ("TELEGRAM_BOT_TOKEN", "create a bot with @BotFather in Telegram and paste the token it gives you"),
         ("GEMINI_API_KEY", "https://aistudio.google.com/"),
         ("TOKEN_ENCRYPTION_KEY", 'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'),
     ]:
@@ -113,19 +110,22 @@ def check_required_env() -> None:
               + ". Remember: /privacy now names OpenAI as a recipient.")
 
     locale = (env("LOCALE") or "he").lower()
-    template_language = (env("WHATSAPP_TEMPLATE_LANGUAGE") or "he").lower()
     if locale not in ("he", "en"):
         check(FAIL, "LOCALE", f"{locale!r} is not a supported language (he or en)")
-    elif not template_language.startswith(locale):
-        check(WARN, "LOCALE vs WHATSAPP_TEMPLATE_LANGUAGE",
-              f"LOCALE={locale} but your templates are set to {template_language!r}: messages sent outside the 24-hour window "
-              "use the templates, so approve them in the same language (or set the two to match)")
     else:
         check(OK, "LOCALE", locale)
 
+    mode = (env("TELEGRAM_MODE") or "polling").lower()
+    if mode not in ("polling", "webhook"):
+        check(FAIL, "TELEGRAM_MODE", f"{mode!r} is not supported (polling or webhook)")
+    elif mode == "webhook" and not (env("PUBLIC_BASE_URL") and env("TELEGRAM_WEBHOOK_SECRET")):
+        check(FAIL, "TELEGRAM_MODE", "webhook mode needs PUBLIC_BASE_URL (https) and TELEGRAM_WEBHOOK_SECRET")
+    else:
+        check(OK, "TELEGRAM_MODE", mode + (" (no public URL needed)" if mode == "polling" else ""))
+
     base = env("PUBLIC_BASE_URL")
     if base and not base.startswith("https://"):
-        check(FAIL, "PUBLIC_BASE_URL", "must start with https:// (WhatsApp shows the links to your users)")
+        check(FAIL, "PUBLIC_BASE_URL", "must start with https:// (Telegram shows the links to your users)")
     elif base:
         check(OK, "PUBLIC_BASE_URL", base)
     else:
@@ -173,22 +173,17 @@ def check_online() -> None:
             check(OK if r.status_code == 200 else FAIL, "Gemini API key", "" if r.status_code == 200 else f"HTTP {r.status_code} - key rejected or API not enabled")
         except httpx.HTTPError as e:
             check(WARN, "Gemini API key", f"could not reach Google ({e.__class__.__name__})")
-    token, phone_id = env("WHATSAPP_ACCESS_TOKEN"), env("WHATSAPP_PHONE_NUMBER_ID")
-    if token and phone_id:
+    token = env("TELEGRAM_BOT_TOKEN")
+    if token:
         try:
-            r = httpx.get(
-                f"https://graph.facebook.com/v21.0/{phone_id}",
-                params={"fields": "display_phone_number,verified_name"},
-                headers={"Authorization": f"Bearer {token}"}, timeout=15,
-            )
-            if r.status_code == 200:
-                d = r.json()
-                check(OK, "WhatsApp token + phone number ID", f"{d.get('display_phone_number')} ({d.get('verified_name')})")
+            api_base = env("TELEGRAM_API_BASE") or "https://api.telegram.org"
+            r = httpx.get(f"{api_base}/bot{token}/getMe", timeout=15)
+            if r.status_code == 200 and r.json().get("ok"):
+                check(OK, "Telegram bot token", "@" + str(r.json()["result"].get("username")))
             else:
-                msg = (r.json().get("error", {}) or {}).get("message", "") if r.headers.get("content-type", "").startswith("application/json") else ""
-                check(FAIL, "WhatsApp token + phone number ID", f"HTTP {r.status_code} {msg} - temporary tokens expire after ~24h")
+                check(FAIL, "Telegram bot token", f"HTTP {r.status_code} - token rejected; copy it again from @BotFather")
         except httpx.HTTPError as e:
-            check(WARN, "WhatsApp token", f"could not reach Meta ({e.__class__.__name__})")
+            check(WARN, "Telegram bot token", f"could not reach Telegram ({e.__class__.__name__})")
 
 
 def check_public_url(base: str) -> None:
@@ -201,16 +196,6 @@ def check_public_url(base: str) -> None:
     except httpx.HTTPError as e:
         check(FAIL, "Public URL reaches the bot", f"{e.__class__.__name__} - is the tunnel up and the bot running?")
         return
-    verify = env("WHATSAPP_WEBHOOK_VERIFY_TOKEN")
-    if verify:
-        try:
-            r = httpx.get(base + "/webhook", params={"hub.mode": "subscribe", "hub.verify_token": verify, "hub.challenge": "pika-doctor"}, timeout=15)
-            if r.status_code == 200 and r.text.strip() == "pika-doctor":
-                check(OK, "Webhook verification handshake", "Meta's callback check will succeed")
-            else:
-                check(FAIL, "Webhook verification handshake", f"HTTP {r.status_code} - the verify token the *running* bot loaded differs from .env, or /webhook is routed elsewhere")
-        except httpx.HTTPError as e:
-            check(FAIL, "Webhook verification handshake", e.__class__.__name__)
     r = None
     try:
         r = httpx.get(base + "/privacy", timeout=15)
@@ -221,7 +206,7 @@ def check_public_url(base: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check a Pika setup.")
-    parser.add_argument("--online", action="store_true", help="also test the Gemini key and WhatsApp token over the network")
+    parser.add_argument("--online", action="store_true", help="also test the Gemini key and Telegram token over the network")
     parser.add_argument("--url", help="public base URL to test (tunnel/reverse proxy), e.g. https://assistant.example.com")
     args = parser.parse_args()
 

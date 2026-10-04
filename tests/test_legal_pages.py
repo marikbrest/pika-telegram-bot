@@ -8,7 +8,7 @@ from src.legal_pages import privacy_html, terms_html
 def test_privacy_page_is_bilingual_and_names_the_recipients():
     body = privacy_html()
     assert "Privacy Policy" in body and "מדיניות פרטיות" in body
-    for recipient in ("Gemini", "Meta", "Ship24", "Open-Meteo", "Yahoo Finance"):
+    for recipient in ("Gemini", "Telegram", "Ship24", "Open-Meteo", "Yahoo Finance"):
         assert recipient in body
     # the operator can read the DB - the page must not claim otherwise
     assert "technically read the stored data" in body

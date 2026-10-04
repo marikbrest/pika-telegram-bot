@@ -27,7 +27,7 @@ from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from src.ai import for_user
-from src.config import DEFAULT_TIMEZONE, WHATSAPP_TEMPLATE_LANGUAGE
+from src.config import DEFAULT_TIMEZONE
 from src.i18n import t
 from src.db.models import (
     count_todays_proactive_notifications,
@@ -40,11 +40,6 @@ from src.db.models import (
 
 _DEFERRABLE_REASONS = ("quiet_hours", "status_busy")
 
-# Gatekeeper stage 0 (2026-09-28): the one flexible template every proactive
-# message falls back to outside the 24h window. Submitted to Meta the same
-# day (Utility category, single body param wrapping the full message text).
-_PROACTIVE_TEMPLATE_NAME = "proactive_update"
-_PROACTIVE_TEMPLATE_LANGUAGE_CODE = WHATSAPP_TEMPLATE_LANGUAGE
 
 
 def _parse_hhmm(value: str) -> time:
@@ -69,7 +64,7 @@ def is_within_quiet_hours(quiet_start: str, quiet_end: str, now_local: datetime)
 def should_deliver_now(user: dict, identifier: str | None = None) -> tuple[bool, str | None]:
     """
     Returns (allowed, reason_blocked | None). identifier: the sender's
-    email/WhatsApp number if this notification is about something from a
+    email/Telegram chat id if this notification is about something from a
     specific sender (e.g. an urgent email) - checked against this user's
     own VIP list. A VIP bypasses quiet hours and an explicit "busy" status,
     but NOT the daily cap - even a VIP message still counts toward "don't
@@ -108,7 +103,7 @@ def should_deliver_now(user: dict, identifier: str | None = None) -> tuple[bool,
 def deliver_proactive_message(user: dict, category: str, body: str, identifier: str | None = None) -> bool:
     """
     The single entry point collectors should call: checks should_deliver_now,
-    reserves a daily-cap slot, sends via WhatsApp if allowed, and releases
+    reserves a daily-cap slot, sends via Telegram if allowed, and releases
     the slot again if the send itself failed. Returns whether it was
     actually sent.
 
@@ -131,18 +126,8 @@ def deliver_proactive_message(user: dict, category: str, body: str, identifier: 
     (see that function's own docstring for the full reasoning - the old
     check-then-separately-log pattern had a real TOCTOU gap between
     APScheduler jobs running on independent intervals).
-
-    Template fallback (Gatekeeper stage 0, 2026-09-28): sends via
-    send_text_or_template with the "proactive_update" template (submitted
-    to Meta the same day, category Utility, single body param) rather than
-    send_text_message alone - previously a proactive message to a user
-    outside the 24h customer-service window simply failed with nothing to
-    fall back to, silently dropping calendar/email updates for anyone who
-    hadn't messaged the bot recently. Safe to wire in before Meta's
-    approval lands (see send_text_or_template's own docstring): until
-    then, the template attempt fails the same way the old plain send did.
     """
-    from src.integrations.whatsapp import send_text_or_template
+    from src.integrations.telegram import send_text_message
 
     allowed, reason = should_deliver_now(user, identifier)
     if not allowed:
@@ -160,11 +145,7 @@ def deliver_proactive_message(user: dict, category: str, body: str, identifier: 
         print(f"[proactive] blocked for user {user['id']} ({category}): daily_cap_reached (race)")
         return False
 
-    sent = send_text_or_template(
-        to=user["whatsapp_number"], body=body,
-        template_name=_PROACTIVE_TEMPLATE_NAME, language_code=_PROACTIVE_TEMPLATE_LANGUAGE_CODE,
-        body_params=[body],
-    )
+    sent = send_text_message(to=user["chat_id"], body=body)
     if not sent:
         delete_proactive_notification_log_row(row_id)  # don't waste a slot on a failed attempt
     return sent
@@ -270,7 +251,7 @@ def assess_situation(
     # classify_new_emails' own prompt, and _FORWARDED_SUGGESTION_PREAMBLE) -
     # added defense in depth even though the practical blast radius is
     # small (this call can only decide interrupt true/false and phrase a
-    # WhatsApp text, never take an action on its own).
+    # Telegram text, never take an action on its own).
     prompt = t(
         "assess.prompt", now=now_local.strftime("%Y-%m-%d %H:%M (%A)"), calendar=calendar_text,
         cap_line=cap_line, category=category, description=event_description, bias=default_bias,

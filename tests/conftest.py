@@ -42,10 +42,9 @@ import tempfile
 
 from cryptography.fernet import Fernet
 
-os.environ.setdefault("WHATSAPP_APP_SECRET", "test-whatsapp-app-secret")
-os.environ.setdefault("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "test-webhook-verify-token")
-os.environ.setdefault("WHATSAPP_ACCESS_TOKEN", "test-whatsapp-access-token")
-os.environ.setdefault("WHATSAPP_PHONE_NUMBER_ID", "000000000000")
+os.environ.setdefault("TELEGRAM_BOT_TOKEN", "123456:test-telegram-bot-token")
+os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test-telegram-webhook-secret")
+os.environ["TELEGRAM_MODE"] = "polling"
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-api-key")
 os.environ.setdefault("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
 os.environ.setdefault("GOOGLE_CLIENT_SECRET", "test-google-client-secret")
@@ -88,7 +87,7 @@ from fastapi.testclient import TestClient
 
 from src.admin_handler import router as admin_router
 from src.db import models
-from src.webhook_handler import router as webhook_router
+from src.telegram_handler import router as telegram_router
 
 # Actually apply the fallback path declared above, now that `models` is
 # importable. Any test that skips the db_path fixture gets this harmless,
@@ -96,7 +95,7 @@ from src.webhook_handler import router as webhook_router
 # src.config.DB_PATH resolved to (the real production DB on this machine).
 models.DB_PATH = _FALLBACK_DB_PATH
 
-WHATSAPP_APP_SECRET = os.environ["WHATSAPP_APP_SECRET"]
+TELEGRAM_WEBHOOK_SECRET = os.environ["TELEGRAM_WEBHOOK_SECRET"]
 ADMIN_HOST = os.environ["ADMIN_HOST"]
 ADMIN_ALLOWED_EMAIL = os.environ["ADMIN_ALLOWED_EMAIL"]
 
@@ -130,7 +129,7 @@ def make_user(db_path):
     """
 
     def _make(
-        whatsapp_number: str = "972500000001",
+        chat_id: str = "972500000001",
         display_name: str = "Test User",
         is_admin: bool = False,
         is_active: bool = True,
@@ -139,9 +138,9 @@ def make_user(db_path):
         conn = models.get_connection()
         try:
             cur = conn.execute(
-                "INSERT INTO users (whatsapp_number, display_name, timezone, is_admin, is_active) "
+                "INSERT INTO users (chat_id, display_name, timezone, is_admin, is_active) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (whatsapp_number, display_name, timezone, int(is_admin), int(is_active)),
+                (chat_id, display_name, timezone, int(is_admin), int(is_active)),
             )
             conn.commit()
             return cur.lastrowid
@@ -166,7 +165,7 @@ def client(db_path):
     real FastAPI request/response cycle.
     """
     app = FastAPI()
-    app.include_router(webhook_router)
+    app.include_router(telegram_router)
     app.include_router(admin_router)
     return TestClient(app)
 
@@ -191,53 +190,27 @@ def _no_real_background_reactions(monkeypatch):
     monkeypatch.setattr("src.webhook_handler._react_to_message_in_background", lambda *a, **k: None)
 
 
-def sign_payload(raw_body: bytes, secret: str = WHATSAPP_APP_SECRET) -> str:
-    """Computes a valid X-Hub-Signature-256 header value for a webhook body,
-    the same way Meta does - so tests can produce requests the app's own
-    _verify_signature() accepts."""
-    digest = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    return f"sha256={digest}"
-
-
-def whatsapp_text_payload(from_number: str, text: str, message_id: str = "wamid.TEST1") -> dict[str, Any]:
-    """A minimal, realistic WhatsApp Cloud API webhook body for one inbound
-    text message - the shape the code in webhook_handler.py actually parses
-    (entry -> changes -> value -> messages)."""
+def telegram_text_update(chat_id: str, text: str, message_id: int = 1, update_id: int = 1) -> dict[str, Any]:
+    """A minimal, realistic Bot API update for one inbound private text message - the shape
+    telegram_handler.normalize_update actually parses."""
     return {
-        "entry": [
-            {
-                "id": "0",
-                "changes": [
-                    {
-                        "value": {
-                            "messaging_product": "whatsapp",
-                            "messages": [
-                                {
-                                    "id": message_id,
-                                    "from": from_number,
-                                    "type": "text",
-                                    "text": {"body": text},
-                                }
-                            ],
-                        },
-                        "field": "messages",
-                    }
-                ],
-            }
-        ]
+        "update_id": update_id,
+        "message": {
+            "message_id": message_id,
+            "date": 1_700_000_000,
+            "chat": {"id": int(chat_id), "type": "private"},
+            "from": {"id": int(chat_id), "is_bot": False, "first_name": "Test"},
+            "text": text,
+        },
     }
 
 
-def post_webhook(client: TestClient, payload: dict) -> Any:
-    """POSTs a webhook payload with a correctly computed signature, matching
-    exactly how FastAPI/httpx will actually serialize the JSON body - signing
-    anything other than the literal bytes sent would produce a signature the
-    server correctly rejects."""
-    raw_body = json.dumps(payload).encode("utf-8")
+def post_update(client: TestClient, update: dict, secret: str | None = None) -> Any:
+    """POSTs an update to /telegram/webhook with the secret token header Telegram sends."""
     return client.post(
-        "/webhook",
-        content=raw_body,
-        headers={"Content-Type": "application/json", "X-Hub-Signature-256": sign_payload(raw_body)},
+        "/telegram/webhook",
+        json=update,
+        headers={"X-Telegram-Bot-Api-Secret-Token": TELEGRAM_WEBHOOK_SECRET if secret is None else secret},
     )
 
 

@@ -5,4 +5,4 @@ labels: enhancement
 ---
 **What problem would this solve?**
 
-**Proposed behaviour** (an example WhatsApp conversation helps)
+**Proposed behaviour** (an example Telegram conversation helps)

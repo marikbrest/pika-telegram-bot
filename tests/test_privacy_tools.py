@@ -51,8 +51,8 @@ def test_explain_privacy_discloses_proactive_mode_reads_gmail_and_calendar():
 # ===== manage_my_data: show =====
 
 def test_manage_my_data_show_reports_real_counts(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    save_incoming_message(1, "היי", "wamid.1", "text")
+    make_user(chat_id="972500000001", display_name="יוסי")
+    save_incoming_message(1, "היי", "msg.1", "text")
     save_outgoing_message(1, "שלום!")
 
     reply = _handle_manage_my_data(_user(), {"action": "show"})
@@ -64,7 +64,7 @@ def test_manage_my_data_show_reports_real_counts(db_path, make_user):
 def test_manage_my_data_show_reflects_google_connection_status(db_path, make_user):
     from src.db.models import get_connection
 
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000001", display_name="יוסי")
     conn = get_connection()
     try:
         conn.execute(
@@ -81,9 +81,9 @@ def test_manage_my_data_show_reflects_google_connection_status(db_path, make_use
 
 
 def test_manage_my_data_show_only_counts_the_requesting_users_own_data(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    make_user(whatsapp_number="972500000002", display_name="רונית")
-    save_incoming_message(2, "הודעה של רונית", "wamid.2", "text")
+    make_user(chat_id="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000002", display_name="רונית")
+    save_incoming_message(2, "הודעה של רונית", "msg.2", "text")
 
     summary = get_user_data_summary(1)
     assert summary["message_count"] == 0
@@ -92,10 +92,10 @@ def test_manage_my_data_show_only_counts_the_requesting_users_own_data(db_path, 
 # ===== manage_my_data: delete_history =====
 
 def test_manage_my_data_delete_history_removes_only_this_users_messages(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    make_user(whatsapp_number="972500000002", display_name="רונית")
-    save_incoming_message(1, "הודעה של יוסי", "wamid.1", "text")
-    save_incoming_message(2, "הודעה של רונית", "wamid.2", "text")
+    make_user(chat_id="972500000001", display_name="יוסי")
+    make_user(chat_id="972500000002", display_name="רונית")
+    save_incoming_message(1, "הודעה של יוסי", "msg.1", "text")
+    save_incoming_message(2, "הודעה של רונית", "msg.2", "text")
 
     reply = _handle_manage_my_data(_user(1), {"action": "delete_history"})
 
@@ -105,9 +105,9 @@ def test_manage_my_data_delete_history_removes_only_this_users_messages(db_path,
 
 
 def test_delete_all_messages_for_user_returns_the_deleted_count(db_path, make_user):
-    make_user(whatsapp_number="972500000001", display_name="יוסי")
-    save_incoming_message(1, "א", "wamid.1", "text")
-    save_incoming_message(1, "ב", "wamid.2", "text")
+    make_user(chat_id="972500000001", display_name="יוסי")
+    save_incoming_message(1, "א", "msg.1", "text")
+    save_incoming_message(1, "ב", "msg.2", "text")
 
     assert delete_all_messages_for_user(1) == 2
     assert delete_all_messages_for_user(1) == 0  # already empty

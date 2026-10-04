@@ -87,9 +87,9 @@ def test_handlers_own_admin_check_still_fires_even_if_called_directly(db_path, m
     "args,expected",
     [
         ({"action": "list"}, True),
-        ({"action": "add", "whatsapp_number": "972501234567"}, True),
+        ({"action": "add", "chat_id": "972501234567"}, True),
         ({"action": "add"}, False),
-        ({"action": "disable", "whatsapp_number": "972501234567"}, True),
+        ({"action": "disable", "chat_id": "972501234567"}, True),
         ({"action": "disable"}, False),
         ({"action": "bogus"}, False),
         ({}, False),

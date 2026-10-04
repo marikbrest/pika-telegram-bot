@@ -43,7 +43,7 @@ def test_save_and_get_due(db_path, make_user):
     assert len(due) == 1
     assert due[0]["id"] == rid
     assert due[0]["recipient_name"] == "דני"
-    assert due[0]["recipient_whatsapp_number"] == "972500000071"
+    assert due[0]["recipient_chat_id"] == "972500000071"
     assert due[0]["attempts_sent"] == 0
     assert due[0]["max_attempts"] == 3
 
@@ -105,8 +105,8 @@ def test_mark_escalated_stops_it_from_being_due(db_path, make_user):
 
 
 def test_list_active_only_shows_this_owners_pending_rows(db_path, make_user):
-    owner_a = make_user(whatsapp_number="972500000001")
-    owner_b = make_user(whatsapp_number="972500000002")
+    owner_a = make_user(chat_id="972500000001")
+    owner_b = make_user(chat_id="972500000002")
     contact_a = save_contact(owner_a, "דני", "972500000071")
     contact_b = save_contact(owner_b, "תומר", "972500000073")
     _seed(owner_a, contact_a, content="A's task")
@@ -171,8 +171,8 @@ def test_find_by_match_also_matches_when_gemini_combines_name_and_content(db_pat
 
 
 def test_cancel_is_ownership_scoped(db_path, make_user):
-    owner_a = make_user(whatsapp_number="972500000001")
-    owner_b = make_user(whatsapp_number="972500000002")
+    owner_a = make_user(chat_id="972500000001")
+    owner_b = make_user(chat_id="972500000002")
     contact_a = save_contact(owner_a, "דני", "972500000071")
     rid = _seed(owner_a, contact_a)
 
@@ -182,7 +182,7 @@ def test_cancel_is_ownership_scoped(db_path, make_user):
 
 
 def test_find_pending_for_number_resolves_by_contact_phone(db_path, make_user):
-    owner_id = make_user(whatsapp_number="972500000001")
+    owner_id = make_user(chat_id="972500000001")
     kid_number = "972500000071"
     contact_id = save_contact(owner_id, "דני", kid_number)
     _seed(owner_id, contact_id, content="שיעורי בית")

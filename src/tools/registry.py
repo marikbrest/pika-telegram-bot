@@ -108,7 +108,7 @@ def tools_for(user: dict) -> list[Tool]:
 
     user is `.get()`-accessed via dict(user), not user.get(...) directly:
     real production callers pass a sqlite3.Row (from
-    get_user_by_whatsapp_number), which supports row["key"] but has no
+    get_user_by_chat_id), which supports row["key"] but has no
     .get() method at all - AttributeError, not a wrong answer. This was
     latent since Stage A (every test here used a plain dict) and only
     surfaced once batch 5 registered the first admin_only=True tool, which

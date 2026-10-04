@@ -48,18 +48,18 @@ def test_package_status_sentinels_stay_hebrew_in_the_db_but_display_localized(en
 def test_calendar_monitor_alert_is_english(db_path, make_user, english):
     from src.scheduler import check_and_monitor_calendar_changes
 
-    make_user(whatsapp_number="972500000001", display_name="Dana", is_admin=True)
+    make_user(chat_id="972500000001", display_name="Dana", is_admin=True)
     set_proactive_enabled(1, True)
 
     def event(start):
         return {"id": "e1", "summary": "Dentist", "start": start, "end": "2026-12-01T11:00:00+02:00", "location": None}
 
     with patch("src.integrations.google_calendar.list_events", return_value=[event("2026-12-01T10:00:00+02:00")]), \
-         patch("src.integrations.whatsapp.send_text_or_template"):
+         patch("src.integrations.telegram.send_text_message"):
         check_and_monitor_calendar_changes()
     with patch("src.integrations.google_calendar.list_events", return_value=[event("2026-12-01T10:30:00+02:00")]), \
          patch("src.proactive.assess_situation", return_value=None), \
-         patch("src.integrations.whatsapp.send_text_or_template", return_value=True) as send:
+         patch("src.integrations.telegram.send_text_message", return_value=True) as send:
         check_and_monitor_calendar_changes()
 
     body = send.call_args.kwargs["body"]
@@ -71,7 +71,7 @@ def test_calendar_monitor_alert_is_english(db_path, make_user, english):
 def test_assessment_prompt_is_english_and_asks_for_english(db_path, make_user, english):
     from src.proactive import assess_situation
 
-    make_user(whatsapp_number="972500000001", display_name="Dana")
+    make_user(chat_id="972500000001", display_name="Dana")
     user = {"id": 1, "timezone": "Asia/Jerusalem"}
     with patch("src.integrations.gemini.call_gemini_json", return_value={"interrupt": False}) as call, \
          patch("src.proactive.get_proactive_settings", return_value=None), \

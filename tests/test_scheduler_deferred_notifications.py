@@ -28,12 +28,12 @@ def _noon():
 
 
 def test_delivers_a_single_deferred_message_once_allowed(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     set_proactive_enabled(1, True)
     defer_proactive_message(1, "calendar_moved", "אירוע הוזז")
 
     with _noon():
-        with patch("src.integrations.whatsapp.send_text_or_template", return_value=True) as mock_send:
+        with patch("src.integrations.telegram.send_text_message", return_value=True) as mock_send:
             check_and_deliver_deferred_notifications()
 
     mock_send.assert_called_once()
@@ -42,13 +42,13 @@ def test_delivers_a_single_deferred_message_once_allowed(db_path, make_user):
 
 
 def test_combines_multiple_deferred_messages_into_one_digest(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     set_proactive_enabled(1, True)
     defer_proactive_message(1, "calendar_moved", "אירוע 1 הוזז")
     defer_proactive_message(1, "email_urgent_vip", "מייל דחוף מהבוס")
 
     with _noon():
-        with patch("src.integrations.whatsapp.send_text_or_template", return_value=True) as mock_send:
+        with patch("src.integrations.telegram.send_text_message", return_value=True) as mock_send:
             check_and_deliver_deferred_notifications()
 
     mock_send.assert_called_once()
@@ -59,14 +59,14 @@ def test_combines_multiple_deferred_messages_into_one_digest(db_path, make_user)
 
 
 def test_leaves_messages_deferred_when_still_blocked(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     set_proactive_enabled(1, True)
     set_proactive_quiet_hours(1, "22:30", "07:00")
     defer_proactive_message(1, "calendar_moved", "אירוע הוזז")
 
     with patch("src.proactive.datetime") as mock_dt:
         mock_dt.now.return_value = datetime(2026, 1, 1, 23, 0, tzinfo=TZ)
-        with patch("src.integrations.whatsapp.send_text_or_template") as mock_send:
+        with patch("src.integrations.telegram.send_text_message") as mock_send:
             check_and_deliver_deferred_notifications()
 
     mock_send.assert_not_called()
@@ -74,12 +74,12 @@ def test_leaves_messages_deferred_when_still_blocked(db_path, make_user):
 
 
 def test_does_not_resend_when_the_underlying_send_fails(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     set_proactive_enabled(1, True)
     defer_proactive_message(1, "calendar_moved", "אירוע הוזז")
 
     with _noon():
-        with patch("src.integrations.whatsapp.send_text_or_template", return_value=False) as mock_send:
+        with patch("src.integrations.telegram.send_text_message", return_value=False) as mock_send:
             check_and_deliver_deferred_notifications()
 
     mock_send.assert_called_once()
@@ -88,7 +88,7 @@ def test_does_not_resend_when_the_underlying_send_fails(db_path, make_user):
 
 
 def test_stale_deferred_message_is_dropped_without_sending(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     set_proactive_enabled(1, True)
     defer_proactive_message(1, "calendar_moved", "אירוע ישן מדי")
 
@@ -104,7 +104,7 @@ def test_stale_deferred_message_is_dropped_without_sending(db_path, make_user):
         conn.close()
 
     with _noon():
-        with patch("src.integrations.whatsapp.send_text_or_template") as mock_send:
+        with patch("src.integrations.telegram.send_text_message") as mock_send:
             check_and_deliver_deferred_notifications()
 
     mock_send.assert_not_called()
@@ -112,7 +112,7 @@ def test_stale_deferred_message_is_dropped_without_sending(db_path, make_user):
 
 
 def test_stale_message_dropped_while_fresh_message_still_delivered(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     set_proactive_enabled(1, True)
     defer_proactive_message(1, "calendar_moved", "ישן")
     defer_proactive_message(1, "calendar_moved", "טרי")
@@ -129,7 +129,7 @@ def test_stale_message_dropped_while_fresh_message_still_delivered(db_path, make
         conn.close()
 
     with _noon():
-        with patch("src.integrations.whatsapp.send_text_or_template", return_value=True) as mock_send:
+        with patch("src.integrations.telegram.send_text_message", return_value=True) as mock_send:
             check_and_deliver_deferred_notifications()
 
     mock_send.assert_called_once()
@@ -138,11 +138,11 @@ def test_stale_message_dropped_while_fresh_message_still_delivered(db_path, make
 
 
 def test_does_nothing_when_there_are_no_deferred_messages(db_path, make_user):
-    make_user(whatsapp_number="972500000001")
+    make_user(chat_id="972500000001")
     set_proactive_enabled(1, True)
 
     with _noon():
-        with patch("src.integrations.whatsapp.send_text_or_template") as mock_send:
+        with patch("src.integrations.telegram.send_text_message") as mock_send:
             check_and_deliver_deferred_notifications()
 
     mock_send.assert_not_called()
@@ -151,8 +151,8 @@ def test_does_nothing_when_there_are_no_deferred_messages(db_path, make_user):
 def test_per_user_error_isolation(db_path, make_user):
     """One user's deferred delivery blowing up must not stop another
     user's from being processed in the same poll."""
-    make_user(whatsapp_number="972500000001")
-    make_user(whatsapp_number="972500000002")
+    make_user(chat_id="972500000001")
+    make_user(chat_id="972500000002")
     set_proactive_enabled(1, True)
     set_proactive_enabled(2, True)
     defer_proactive_message(1, "calendar_moved", "user 1's message")
@@ -164,7 +164,7 @@ def test_per_user_error_isolation(db_path, make_user):
         return True
 
     with _noon():
-        with patch("src.integrations.whatsapp.send_text_or_template", side_effect=send_side_effect) as mock_send:
+        with patch("src.integrations.telegram.send_text_message", side_effect=send_side_effect) as mock_send:
             check_and_deliver_deferred_notifications()
 
     assert mock_send.call_count == 2

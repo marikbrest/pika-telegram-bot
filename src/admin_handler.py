@@ -180,7 +180,7 @@ async def users_page(request: Request, msg: str = "", err: str = ""):
         rows += f"""<tr>
             <td>{u['id']}</td>
             <td>{_esc(u['display_name'])}</td>
-            <td dir="ltr">{_esc(u['whatsapp_number'])}</td>
+            <td dir="ltr">{_esc(u['chat_id'])}</td>
             <td>{status}</td>
             <td>{u['message_count']}</td>
             <td>{u['active_reminders']}</td>
@@ -214,35 +214,27 @@ async def users_page(request: Request, msg: str = "", err: str = ""):
   <h2>הוספת משתמש</h2>
   <form method="post" action="/admin/users/add">
     <input name="display_name" placeholder="שם (באנגלית)" required>
-    <input name="whatsapp_number" placeholder="9725XXXXXXXX" pattern="[0-9+\\-() ]{{9,20}}" required dir="ltr">
+    <input name="chat_id" placeholder="123456789" pattern="[0-9 ]{{5,20}}" required dir="ltr">
     <button type="submit">הוסף</button>
   </form>
-  <p style="color:var(--muted);font-size:13px">פורמט בינלאומי, ספרות בלבד, בלי +. המשתמש יוכל לכתוב לבוט מיד אחרי ההוספה.</p>
+  <p style="color:var(--muted);font-size:13px">מזהה הצ'אט בטלגרם (ספרות בלבד; המשתמש מקבל אותו מ-@userinfobot או מ-/id בבוט). אחרי ההוספה הוא צריך ללחוץ Start בבוט.</p>
 </div>"""
     return HTMLResponse(_PAGE_TEMPLATE.format(content=content))
 
 
 @router.post("/users/add")
-async def add_user(request: Request, display_name: str = Form(...), whatsapp_number: str = Form(...)):
+async def add_user(request: Request, display_name: str = Form(...), chat_id: str = Form(...)):
     if not _authorized(request):
         return _deny()
 
-    # Same normalisation as in chat: a local number (05X) must become
-    # international, otherwise it will never match what WhatsApp sends in the
-    # webhook.
-    digits = "".join(ch for ch in whatsapp_number if ch.isdigit())
-    if digits.startswith("00"):
-        digits = digits[2:]
-    if digits.startswith("0"):
-        digits = "972" + digits[1:]
-    number = digits
-    if not (11 <= len(number) <= 15):
-        return RedirectResponse("/admin/?err=מספר לא תקין", status_code=303)
+    number = "".join(ch for ch in chat_id if ch.isdigit())
+    if not (5 <= len(number) <= 15):
+        return RedirectResponse("/admin/?err=מזהה צ'אט לא תקין", status_code=303)
 
     ok = admin_add_user(number, display_name.strip())
     if not ok:
         return RedirectResponse("/admin/?err=המספר כבר קיים", status_code=303)
-    log_admin_action(_admin_email(request), "add_user", details=f"whatsapp_number={number}, display_name={display_name.strip()}")
+    log_admin_action(_admin_email(request), "add_user", details=f"chat_id={number}, display_name={display_name.strip()}")
     new_user = get_user_by_number_any_status(number)
     if new_user is not None:
         from starlette.concurrency import run_in_threadpool
@@ -539,7 +531,7 @@ async def restart_server(request: Request):
 <div class="card">
   <h2>השרת נסגר…</h2>
   <p>סקריפט המעקב יפעיל אותו מחדש תוך כ-30 שניות.</p>
-  <p style="color:var(--muted);font-size:13px">אם אחרי דקה עדיין אין תגובה — כנראה שסקריפט המעקב לא רץ, ותצטרך להריץ ידנית: <code dir="ltr">Start-ScheduledTask -TaskName "PersonalAssistantWhatsApp"</code></p>
+  <p style="color:var(--muted);font-size:13px">אם אחרי דקה עדיין אין תגובה — כנראה שסקריפט המעקב לא רץ, ותצטרך להריץ ידנית: <code dir="ltr">Start-ScheduledTask -TaskName "PersonalAssistantTelegram"</code></p>
   <p><a style="color:var(--accent)" href="/admin/system">רענן אחרי כמה שניות</a></p>
 </div>"""
         )

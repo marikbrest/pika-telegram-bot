@@ -4,6 +4,16 @@ All notable changes to this project. Format follows [Keep a Changelog](https://k
 
 ## [Unreleased]
 
+### Changed
+- **This repository is the Telegram edition of Pika**, forked from
+  [pika-personal-whatsapp-bot](https://github.com/marikbrest/pika-personal-whatsapp-bot) at the `LOCALE` release. WhatsApp is removed:
+  new `src/integrations/telegram.py` (Bot API client with retries, chunking, reactions, photos, media download) and
+  `src/telegram_handler.py` (long polling by default - no public URL needed - or a webhook protected by a secret header). Telegram updates are
+  normalised to the existing internal message shape, so the whole tool pipeline is unchanged. Users are identified by Telegram chat id
+  (`users.chat_id`, was a phone number); message templates, the 24-hour window and Meta signature checks are gone. New `.env` variables:
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_MODE`, `TELEGRAM_WEBHOOK_SECRET`. Guide: `docs/SETUP_TELEGRAM.md`.
+- The history below this entry describes the WhatsApp edition.
+
 ### Added
 - **`LOCALE` setting (`he` default, `en`).** Messages the code composes itself (confirmations, reminders, calendar/email alerts, package
   updates, daily summaries, the "what can you do" list, the privacy text, the welcome message, the Google-connected page, weather and

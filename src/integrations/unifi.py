@@ -3,7 +3,7 @@ Read-only queries against the UniFi Network Integration API - client count
 and whether the gateway is reachable, for the same admin-only home-infra
 status query that already reports Zabbix problems.
 
-Uses a dedicated "whatsapp-bot" API key (not a key shared with other tools) - same least-privilege reasoning as the
+Uses a dedicated "pika-bot" API key (not a key shared with other tools) - same least-privilege reasoning as the
 dedicated Zabbix API token: if this key leaks, its blast radius is isolated
 and audit trails show which consumer made which call.
 

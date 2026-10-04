@@ -1,8 +1,8 @@
 """
 Google OAuth2 - connecting Gmail + Calendar through a link-based consent flow.
 
-Since the bot lives in WhatsApp rather than a website, the flow is:
-1. The user asks to connect Gmail over WhatsApp
+Since the bot lives in Telegram rather than a website, the flow is:
+1. The user asks to connect Gmail over Telegram
 2. The bot builds a Google OAuth link and sends it as a message
 3. The user approves in the browser; Google redirects to /oauth/callback
 4. The code here exchanges the code for tokens, encrypts and stores them

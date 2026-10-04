@@ -11,13 +11,13 @@ issue; see [CONTRIBUTING.md](./CONTRIBUTING.md) and [docs/ADDING_A_TOOL.md](./do
 - **More LLM providers.** OpenAI is built in as an optional per-user provider
   ([docs/ADDING_A_PROVIDER.md](./docs/ADDING_A_PROVIDER.md)); Anthropic or a local OpenAI-compatible server would each be one adapter
   module plus a registry entry.
-- **Other channels.** WhatsApp specifics live in `src/integrations/whatsapp.py` and the webhook;
-  a Telegram (or Signal/Matrix) adapter would reuse the whole tool pipeline.
+- **Other channels.** Telegram specifics live in `src/integrations/telegram.py` and `src/telegram_handler.py`;
+  a Signal/Matrix adapter would reuse the whole tool pipeline. (The WhatsApp version of Pika is a separate project.)
 - **Deployment recipes:** a systemd unit, a Caddy/Traefik compose example as an alternative to
   Cloudflare Tunnel, a Kubernetes manifest.
 - **Welcome message for new users** with the privacy policy and terms links ([#17](https://github.com/marikbrest/pika-personal-whatsapp-bot/issues/17)).
 - **`scripts/delete_user.py`**: remove a user and all their data in one step ([#18](https://github.com/marikbrest/pika-personal-whatsapp-bot/issues/18)).
-- **Real screenshots** of the setup flow for `docs/SETUP_META.md`.
+- **Real screenshots** of the setup flow for `docs/SETUP_TELEGRAM.md`.
 - **Type hints and `mypy`** on the core modules.
 - **Test coverage report** in CI.
 

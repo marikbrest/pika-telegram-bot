@@ -32,7 +32,7 @@ are set, the pages show a visible placeholder - do not hand out the link before 
 ## Before you invite anyone
 
 1. Read [PRIVACY_FOR_OPERATORS.md](./PRIVACY_FOR_OPERATORS.md) and tell people, in plain language, what leaves
-   your machine (Gemini, Meta) and that **you can technically read the database**.
+   your machine (Gemini, Telegram) and that **you can technically read the database**.
 2. Send them the `/privacy` and `/terms` links, and only add people who agreed.
 3. If you submit the Google OAuth app for verification with Gmail scopes, Google may require a security assessment
    for "restricted" scopes once the app is used beyond a small number of users. Staying in a small private group

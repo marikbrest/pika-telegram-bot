@@ -91,18 +91,18 @@ def test_tools_for_works_with_a_real_sqlite_row_not_just_a_plain_dict(db_path, m
     itself, not by inspection): tools_for() used to call user.get("is_admin")
     directly, which crashes with AttributeError on a real sqlite3.Row (the
     actual type every production caller passes, from
-    get_user_by_whatsapp_number - Row supports row["key"] but has no .get()
+    get_user_by_chat_id - Row supports row["key"] but has no .get()
     at all). This was latent since Stage A because every test used a plain
     dict, and the `or` short-circuited on `not t.admin_only` for every tool
     until batch 5 registered the first admin_only=True tool - only then did
     the right-hand side actually get evaluated against a real row."""
-    from src.db.models import get_user_by_whatsapp_number
+    from src.db.models import get_user_by_chat_id
 
-    admin_user_id = make_user(whatsapp_number="972500000001", is_admin=True)
-    non_admin_user_id = make_user(whatsapp_number="972500000002", is_admin=False)
+    admin_user_id = make_user(chat_id="972500000001", is_admin=True)
+    non_admin_user_id = make_user(chat_id="972500000002", is_admin=False)
 
-    admin_row = get_user_by_whatsapp_number("972500000001")
-    non_admin_row = get_user_by_whatsapp_number("972500000002")
+    admin_row = get_user_by_chat_id("972500000001")
+    non_admin_row = get_user_by_chat_id("972500000002")
     assert not isinstance(admin_row, dict)  # confirms this is really exercising the sqlite3.Row path
 
     admin_tool = get_tool("get_infra_status")

@@ -14,7 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from src.i18n import t
 
-from src.config import DEFAULT_TIMEZONE, WHATSAPP_TEMPLATE_LANGUAGE
+from src.config import DEFAULT_TIMEZONE
 
 _WEEKDAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
@@ -24,11 +24,6 @@ def day_name(code: str) -> str:
     return t(f"day.{code}")
 
 
-# WhatsApp Cloud API language code for the Hebrew templates submitted in
-# WhatsApp Manager (reminder_notification, package_status_update,
-# google_reconnect_needed) - must match what each template was approved
-# under, not just "Hebrew" as shown in the UI.
-_TEMPLATE_LANGUAGE_CODE = WHATSAPP_TEMPLATE_LANGUAGE
 
 # Default per-user daily-meetings-summary send time (a user can set their
 # own via manage_daily_meetings_summary - see src/tools/batch13.py; this is
@@ -135,13 +130,12 @@ def notify_reminder_delivery_failure(recipient_name: str, content: str, owner_nu
     owner is already in that notify list (the common case), they get
     exactly one copy, not two.
 
-    Shared by both places a reminder to a contact can finally, genuinely
-    fail: check_and_send_reminders's own synchronous failure branch, and
-    whatsapp.handle_delivery_status's async on_permanent_failure callback
-    (the 24h-window template retry itself failing).
+    Shared by both places a reminder to a contact can finally fail:
+    check_and_send_reminders and check_and_send_persistent_reminders - when
+    Telegram refuses the send (the contact never started the bot, or blocked it).
     """
     from src.db.models import list_reminder_delivery_failure_notification_numbers
-    from src.integrations.whatsapp import send_text_message
+    from src.integrations.telegram import send_text_message
 
     notice = t("reminder.delivery_failed_notice", recipient=recipient_name, content=content)
     recipients = {owner_number, *list_reminder_delivery_failure_notification_numbers()}
@@ -159,14 +153,14 @@ def check_and_send_reminders() -> None:
     consolidated message instead of flooding the chat.
     """
     # Late import to avoid a circular import (models only imports from config,
-    # but whatsapp/scheduler may be loaded before the app is ready)
+    # but telegram/scheduler may be loaded before the app is ready)
     from src.db.models import (
         deactivate_reminder,
         get_due_reminders,
         save_outgoing_message,
         update_reminder_next_trigger,
     )
-    from src.integrations.whatsapp import send_text_or_template
+    from src.integrations.telegram import send_text_message
 
     now_utc = datetime.now(ZoneInfo("UTC"))
     due = get_due_reminders(now_utc.isoformat())
@@ -191,60 +185,24 @@ def check_and_send_reminders() -> None:
 
             if len(reminders) == 1:
                 body = t("reminder.single", prefix=prefix, content=reminders[0]["content"])
-                template_content = f"{reminders[0]['content']}{prefix}"
+                summary_text = f"{reminders[0]['content']}{prefix}"
             else:
                 lines = "\n".join(f"- {r['content']}" for r in reminders)
                 body = t("reminder.multi", prefix=prefix, count=len(reminders), lines=lines)
                 joined = "; ".join(r["content"] for r in reminders)
-                template_content = t("reminder.multi_template", count=len(reminders), prefix=prefix, joined=joined)
+                summary_text = t("reminder.multi_template", count=len(reminders), prefix=prefix, joined=joined)
 
-            # reminder_notification is a pre-approved Utility template (see
-            # WHATSAPP_ACCESS_TOKEN / WhatsApp Manager) - it lets a reminder
-            # actually reach a recipient who hasn't messaged the bot in the
-            # last 24h, which free text alone cannot (WhatsApp's own policy).
-            # Before Meta approves the template this behaves exactly like the
-            # old send_text_message call always did (the template send also
-            # fails, same net result); once approved, delivery starts working
-            # with no further code change.
             owner_number = reminders[0]["owner_number"]
             recipient = reminders[0]["recipient_name"]
 
-            # 2026-09-19: if send_text_or_template's own 24h-window fallback
-            # retry only fails later, asynchronously (see its docstring),
-            # this is what finally notifies both parents - the synchronous
-            # `if not sent` branch right below can't see that failure at
-            # all, since by then it hasn't happened yet.
-            #
-            # 2026-09-25: the three values are bound as DEFAULT ARGUMENTS,
-            # not captured by closure. This lambda is invoked long after
-            # this loop has finished (from whatever later webhook request
-            # carries the failed delivery status), and recipient/
-            # template_content/owner_number are all rebound on every
-            # iteration - a plain closure would report whichever kid
-            # happened to be last in the loop, for every failure.
-            on_permanent_failure = (
-                (lambda r=recipient, c=template_content, o=owner_number: notify_reminder_delivery_failure(r, c, o))
-                if is_for_contact else None
-            )
-
-            sent = send_text_or_template(
-                to=destination_number,
-                body=body,
-                template_name="reminder_notification",
-                language_code=_TEMPLATE_LANGUAGE_CODE,
-                body_params=[template_content],
-                on_permanent_failure=on_permanent_failure,
-            )
+            sent = send_text_message(to=destination_number, body=body)
             if not sent:
                 if is_for_contact:
-                    # Delivery failure to a contact is most likely permanent
-                    # (WhatsApp's 24-hour window policy: the recipient has not
-                    # messaged the bot recently, and the template fallback
-                    # above already tried and also failed - e.g. not yet
-                    # approved). Retrying every 60 seconds forever would only
-                    # spam the logs and delay others. Instead: notify the
-                    # owner (and co-parent) and advance/deactivate the reminder.
-                    notify_reminder_delivery_failure(recipient, template_content, owner_number)
+                    # Delivery failure to a contact is most likely permanent (the recipient never
+                    # started the bot, or blocked it). Retrying every 60 seconds forever would only
+                    # spam the logs and delay others. Instead: notify the owner (and co-parent) and
+                    # advance/deactivate the reminder.
+                    notify_reminder_delivery_failure(recipient, summary_text, owner_number)
                     save_outgoing_message(reminders[0]["user_id"], t("reminder.delivery_failed_logged", recipient=recipient))
                     for r in reminders:
                         if r["schedule_type"] == "once":
@@ -342,7 +300,7 @@ def check_and_notify_package_changes() -> None:
     Called every hour by the BackgroundScheduler. Checks each tracked
     package's live Ship24 status at most once every 24h - staggered per
     package from whenever it was first found/last checked (get_due_for_check's
-    cutoff, not a fixed daily clock time) - and sends a WhatsApp notification
+    cutoff, not a fixed daily clock time) - and sends a Telegram notification
     only when the status actually changed since the last check, never on
     every check, so a package sitting in the same state doesn't generate
     daily noise.
@@ -358,7 +316,7 @@ def check_and_notify_package_changes() -> None:
     """
     from src.db.models import get_packages_due_for_check, update_package_status
     from src.integrations.shipping import ShippingNotConfiguredError, get_tracking_status
-    from src.integrations.whatsapp import send_text_message, send_text_or_template
+    from src.integrations.telegram import send_text_message
 
     now_utc = datetime.now(ZoneInfo("UTC"))
     cutoff = (now_utc - _PACKAGE_CHECK_INTERVAL).isoformat()
@@ -377,7 +335,7 @@ def check_and_notify_package_changes() -> None:
             label = pkg["description"] or pkg["tracking_number"]
             update_package_status(pkg["id"], _ABANDONED_PACKAGE_STATUS)
             send_text_message(
-                to=pkg["whatsapp_number"],
+                to=pkg["chat_id"],
                 body=t("package.abandoned", label=label),
             )
             continue
@@ -401,17 +359,7 @@ def check_and_notify_package_changes() -> None:
                 "package.update", label=label,
                 old=package_status_label(old_status), new=package_status_label(new_status),
             )
-            # package_status_update is a pre-approved Utility template -
-            # falls back to it automatically when the recipient is outside
-            # the 24h window; see check_and_send_reminders for the same
-            # pattern and why it's safe before/after Meta approval.
-            send_text_or_template(
-                to=pkg["whatsapp_number"],
-                body=body,
-                template_name="package_status_update",
-                language_code=_TEMPLATE_LANGUAGE_CODE,
-                body_params=[label, old_status, new_status],
-            )
+            send_text_message(to=pkg["chat_id"], body=body)
 
 
 # Notified-at most once a day per user even if the job somehow runs more often
@@ -423,7 +371,7 @@ _token_alert_sent_on: dict[int, str] = {}
 def check_google_token_health() -> None:
     """
     Runs once a day. Forces a refresh-token exchange for every user who has
-    connected Google and WhatsApps them a reconnect link if it has died.
+    connected Google and Telegrams them a reconnect link if it has died.
 
     Why this exists: on 2026-09-04 the stored refresh_token was revoked on
     Google's side and the first anyone knew of it was calendar and mail silently
@@ -440,7 +388,7 @@ def check_google_token_health() -> None:
         build_auth_url,
         get_credentials,
     )
-    from src.integrations.whatsapp import send_text_or_template
+    from src.integrations.telegram import send_text_message
 
     today = datetime.now(ZoneInfo("UTC")).date().isoformat()
 
@@ -463,19 +411,7 @@ def check_google_token_health() -> None:
             try:
                 auth_url = build_auth_url(user["id"])
                 body = t("google.reconnect_alert", url=auth_url)
-                # google_reconnect_needed is a pre-approved Utility template -
-                # same fallback pattern as check_and_send_reminders. This alert
-                # exists specifically because the user may not have messaged
-                # the bot recently (that's often *why* the token expired
-                # unnoticed), so the 24h window is a real risk here, not a
-                # theoretical one.
-                send_text_or_template(
-                    to=user["whatsapp_number"],
-                    body=body,
-                    template_name="google_reconnect_needed",
-                    language_code=_TEMPLATE_LANGUAGE_CODE,
-                    body_params=[auth_url],
-                )
+                send_text_message(to=user["chat_id"], body=body)
                 print(f"[scheduler] google token expired for user {user['id']} - reconnect link sent")
             except Exception as e:
                 print(f"[scheduler] could not notify user {user['id']} about expired token: {e}")
@@ -503,7 +439,7 @@ def check_watches() -> None:
     """
     from src.db.models import get_watches_due_for_check, update_watch_state
     from src.integrations.watchers import CHECKERS, NOTIFY_MESSAGES
-    from src.integrations.whatsapp import send_text_message
+    from src.integrations.telegram import send_text_message
 
     now_utc = datetime.now(ZoneInfo("UTC"))
     cutoff = (now_utc - _WATCH_CHECK_INTERVAL).isoformat()
@@ -528,7 +464,7 @@ def check_watches() -> None:
         if old_state is not None and new_state != old_state:
             label = watch["label"] or watch["target"]
             body = NOTIFY_MESSAGES[watch["watch_type"]](label)
-            send_text_message(to=watch["whatsapp_number"], body=body)
+            send_text_message(to=watch["chat_id"], body=body)
 
 
 def check_and_send_kids_schedule_reminders() -> None:
@@ -549,13 +485,13 @@ def check_and_send_kids_schedule_reminders() -> None:
     watches): one user's bad timezone string or a transient send failure
     must not block the rest.
 
-    No approved WhatsApp template exists yet for this (same position as
+    No approved Telegram template exists yet for this (same position as
     watch notifications) - plain text; a template submission, not a code
     change, if this ever needs to reliably reach someone outside the 24h
     window.
     """
     from src.db.models import get_kids_schedule_for_day, list_users_with_kids_schedule
-    from src.integrations.whatsapp import send_text_message
+    from src.integrations.telegram import send_text_message
 
     for user in list_users_with_kids_schedule():
         try:
@@ -569,7 +505,7 @@ def check_and_send_kids_schedule_reminders() -> None:
 
             blocks = [f"*{r['kid_name']}:*\n{r['content']}" for r in rows]
             body = t("kids.schedule_tomorrow", day=day_name(day_of_week), blocks="\n\n".join(blocks))
-            send_text_message(to=user["whatsapp_number"], body=body)
+            send_text_message(to=user["chat_id"], body=body)
         except Exception as e:
             print(f"[scheduler] kids schedule reminder failed for user {user['user_id']}: {e}")
 
@@ -628,7 +564,7 @@ def check_and_send_daily_meetings_summaries() -> None:
     """
     from src.db.models import list_users_with_daily_meetings_summary_enabled, mark_daily_meetings_summary_sent
     from src.integrations.google_oauth import GoogleAuthExpiredError, NotConnectedError, build_auth_url
-    from src.integrations.whatsapp import send_text_message
+    from src.integrations.telegram import send_text_message
     from src.morning_brief import _calendar_section
 
     for user in list_users_with_daily_meetings_summary_enabled():
@@ -665,7 +601,7 @@ def check_and_send_daily_meetings_summaries() -> None:
                 print(f"[scheduler] daily meetings summary: Google auth failed twice for user {user['user_id']} ({type(e).__name__}): {e}")
                 auth_url = build_auth_url(user["user_id"])
                 body = t("meetings.sync_failed", url=auth_url)
-                send_text_message(to=user["whatsapp_number"], body=body)
+                send_text_message(to=user["chat_id"], body=body)
                 mark_daily_meetings_summary_sent(user["user_id"], today_str)
                 continue
 
@@ -674,7 +610,7 @@ def check_and_send_daily_meetings_summaries() -> None:
 
             name_suffix = t("greeting.name_suffix", name=user["display_name"]) if user["display_name"] else ""
             greeting = t("greeting.morning", name=name_suffix)
-            send_text_message(to=user["whatsapp_number"], body=f"{greeting}\n\n{calendar_text}")
+            send_text_message(to=user["chat_id"], body=f"{greeting}\n\n{calendar_text}")
             mark_daily_meetings_summary_sent(user["user_id"], today_str)
         except Exception as e:
             print(f"[scheduler] daily meetings summary failed for user {user['user_id']}: {e}")
@@ -773,7 +709,7 @@ def check_and_send_persistent_reminders() -> None:
         mark_persistent_reminder_escalated,
         reschedule_persistent_reminder_for_next_occurrence,
     )
-    from src.integrations.whatsapp import send_text_message, send_text_or_template
+    from src.integrations.telegram import send_text_message
 
     now_utc = datetime.now(ZoneInfo("UTC"))
     for row in get_due_persistent_reminders(now_utc.isoformat()):
@@ -783,7 +719,7 @@ def check_and_send_persistent_reminders() -> None:
                     "nag.escalation", recipient=row["recipient_name"],
                     content=row["content"], attempts=row["max_attempts"],
                 )
-                send_text_message(to=row["owner_whatsapp_number"], body=body)
+                send_text_message(to=row["owner_chat_id"], body=body)
                 if row["schedule_type"] == "once":
                     mark_persistent_reminder_escalated(row["id"])
                 else:
@@ -800,43 +736,14 @@ def check_and_send_persistent_reminders() -> None:
             with use_user({"id": row["owner_user_id"]}):  # the OWNER's provider writes the nag
                 body = _generate_creative_reminder_text(row["content"], row["recipient_name"], owner_kid_facing_name)
 
-            # 2026-09-25: send_text_or_template, NOT send_text_message.
-            # This path was the one place a proactive message to a kid
-            # still had no 24h-window template fallback at all - found
-            # while reviewing what else to build, right after the kids'
-            # chore reminders were converted from ordinary reminders (which
-            # DO have it) to persistent ones (which did not). Since a kid
-            # is outside the window by default - a "delivered"/"read"
-            # receipt does NOT open it, only a message they actually send
-            # does - the nag simply vanished, silently, for exactly the
-            # recipients this feature exists for.
-            #
-            # body_params carries a PLAIN one-line summary, never the
-            # creative body itself: WhatsApp rejects template parameters
-            # containing newlines, and the creative text always has them
-            # (the confirmation instruction is appended on its own line).
-            template_content = t("reminder.kid_template_content", content=row["content"], owner=owner_kid_facing_name)
+            summary_text = t("reminder.kid_template_content", content=row["content"], owner=owner_kid_facing_name)
             recipient_name = row["recipient_name"]
-            owner_number = row["owner_whatsapp_number"]
-            sent = send_text_or_template(
-                to=row["recipient_whatsapp_number"],
-                body=body,
-                template_name="reminder_notification",
-                language_code=_TEMPLATE_LANGUAGE_CODE,
-                body_params=[template_content],
-                # Default-arg bound, not closed over - invoked from a later
-                # webhook request, long after this loop has moved on (see
-                # check_and_send_reminders' own note on the same hazard).
-                on_permanent_failure=(
-                    lambda r=recipient_name, c=template_content, o=owner_number:
-                    notify_reminder_delivery_failure(r, c, o)
-                ),
-            )
+            owner_number = row["owner_chat_id"]
+            sent = send_text_message(to=row["recipient_chat_id"], body=body)
             if not sent:
-                # Same reasoning as check_and_send_reminders' synchronous
-                # failure branch: tell both parents, and still advance the
-                # attempt rather than hot-looping this row every 60s.
-                notify_reminder_delivery_failure(recipient_name, template_content, owner_number)
+                # Same reasoning as check_and_send_reminders' failure branch: tell both
+                # parents, and still advance the attempt rather than hot-looping this row every 60s.
+                notify_reminder_delivery_failure(recipient_name, summary_text, owner_number)
             next_trigger = now_utc + timedelta(minutes=row["retry_interval_minutes"])
             advance_persistent_reminder(row["id"], next_trigger)
         except Exception as e:
@@ -849,7 +756,7 @@ def check_and_send_cost_report() -> None:
     proactive/unattended feature gets built on top of this bot: a real cost
     report every 2 days, plus an immediate alert if month-to-date spend
     crosses COST_ALERT_BUDGET_USD - both sent ONLY to his own number (see
-    config.OWNER_WHATSAPP_NUMBER's own docstring for why "only to me", not
+    config.OWNER_CHAT_ID's own docstring for why "only to me", not
     every admin the way check_google_token_health sends to all of them).
 
     Runs once a day (cron, cheap - reads DB + one BigQuery query, no Gemini
@@ -863,13 +770,13 @@ def check_and_send_cost_report() -> None:
     specifically avoids repeating (an in-memory cooldown resets on every
     restart, turning "every 2 days" into "every restart" in practice).
     """
-    from src.config import COST_ALERT_BUDGET_USD, OWNER_WHATSAPP_NUMBER
+    from src.config import COST_ALERT_BUDGET_USD, OWNER_CHAT_ID
     from src.db.models import get_cost_report_state, mark_budget_alert_sent, mark_cost_report_sent
     from src.integrations.gcp_billing import get_month_to_date_cost
-    from src.integrations.whatsapp import send_text_message
+    from src.integrations.telegram import send_text_message
     from src.webhook_handler import _build_usage_report_text, _estimated_month_cost_usd
 
-    if not OWNER_WHATSAPP_NUMBER:
+    if not OWNER_CHAT_ID:
         return  # not configured - nothing to send, nowhere to send it
 
     state = get_cost_report_state()
@@ -879,7 +786,7 @@ def check_and_send_cost_report() -> None:
     due = last_sent is None or (today - date.fromisoformat(last_sent)).days >= 2
     if due:
         try:
-            send_text_message(to=OWNER_WHATSAPP_NUMBER, body=_build_usage_report_text())
+            send_text_message(to=OWNER_CHAT_ID, body=_build_usage_report_text())
             mark_cost_report_sent(today.isoformat())
         except Exception as e:
             print(f"[scheduler] cost report send failed (non-fatal): {e}")
@@ -909,7 +816,7 @@ def check_and_send_cost_report() -> None:
 
     try:
         send_text_message(
-            to=OWNER_WHATSAPP_NUMBER,
+            to=OWNER_CHAT_ID,
             body=t("cost.budget_exceeded", budget=COST_ALERT_BUDGET_USD, cost=month_cost),
         )
         mark_budget_alert_sent()
@@ -1276,7 +1183,7 @@ def check_and_deliver_deferred_notifications() -> None:
     deterministic policy (should_deliver_now).
 
     Multiple deferred messages for the same user are combined into ONE
-    WhatsApp send (a bulleted digest) rather than delivered individually -
+    Telegram send (a bulleted digest) rather than delivered individually -
     catching up on N held updates then only ever costs 1 slot of the daily
     cap, not N, and matches the plan's own framing ("לא תמיד עדכון
     בודד - מתאחדת לסיכום אחד").

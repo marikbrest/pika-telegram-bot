@@ -19,7 +19,7 @@ def _tomorrow_day_of_week(timezone_name: str = "Asia/Jerusalem") -> str:
 
 def test_sends_nothing_when_no_user_has_saved_a_schedule(db_path, make_user):
     make_user()
-    with patch("src.integrations.whatsapp.send_text_message") as mock_send:
+    with patch("src.integrations.telegram.send_text_message") as mock_send:
         check_and_send_kids_schedule_reminders()
     mock_send.assert_not_called()
 
@@ -30,17 +30,17 @@ def test_sends_nothing_for_a_user_whose_only_saved_day_is_not_tomorrow(db_path, 
     not_tomorrow = next(d for d in _WEEKDAY_NAMES if d != tomorrow)
     upsert_kid_schedule_day(user_id, "דני", not_tomorrow, "חשבון")
 
-    with patch("src.integrations.whatsapp.send_text_message") as mock_send:
+    with patch("src.integrations.telegram.send_text_message") as mock_send:
         check_and_send_kids_schedule_reminders()
     mock_send.assert_not_called()
 
 
 def test_sends_tomorrows_schedule_for_a_single_kid(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     tomorrow = _tomorrow_day_of_week()
     upsert_kid_schedule_day(user_id, "דני", tomorrow, "חשבון בשמונה")
 
-    with patch("src.integrations.whatsapp.send_text_message") as mock_send:
+    with patch("src.integrations.telegram.send_text_message") as mock_send:
         check_and_send_kids_schedule_reminders()
 
     mock_send.assert_called_once()
@@ -51,12 +51,12 @@ def test_sends_tomorrows_schedule_for_a_single_kid(db_path, make_user):
 
 
 def test_consolidates_multiple_kids_into_one_message(db_path, make_user):
-    user_id = make_user(whatsapp_number="972500000001")
+    user_id = make_user(chat_id="972500000001")
     tomorrow = _tomorrow_day_of_week()
     upsert_kid_schedule_day(user_id, "דני", tomorrow, "חשבון")
     upsert_kid_schedule_day(user_id, "נועה", tomorrow, "ציור")
 
-    with patch("src.integrations.whatsapp.send_text_message") as mock_send:
+    with patch("src.integrations.telegram.send_text_message") as mock_send:
         check_and_send_kids_schedule_reminders()
 
     mock_send.assert_called_once()
@@ -67,13 +67,13 @@ def test_consolidates_multiple_kids_into_one_message(db_path, make_user):
 
 def test_one_user_failing_does_not_block_the_next(db_path, make_user):
     """Per-user error isolation, same 12.3 principle as reminders/packages/watches."""
-    user_a = make_user(whatsapp_number="972500000001")
-    user_b = make_user(whatsapp_number="972500000002")
+    user_a = make_user(chat_id="972500000001")
+    user_b = make_user(chat_id="972500000002")
     tomorrow = _tomorrow_day_of_week()
     upsert_kid_schedule_day(user_a, "דני", tomorrow, "חשבון")
     upsert_kid_schedule_day(user_b, "נועה", tomorrow, "ציור")
 
-    with patch("src.integrations.whatsapp.send_text_message", side_effect=[Exception("boom"), None]) as mock_send:
+    with patch("src.integrations.telegram.send_text_message", side_effect=[Exception("boom"), None]) as mock_send:
         check_and_send_kids_schedule_reminders()
 
     assert mock_send.call_count == 2

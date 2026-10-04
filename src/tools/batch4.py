@@ -86,7 +86,7 @@ reminder_tool = register(Tool(
 
 def _validate_add_contact_args(args: dict) -> bool:
     """Transplanted verbatim from intent_parser._validate_result's add_contact block."""
-    return {"name", "whatsapp_number"}.issubset(args.keys())
+    return {"name", "chat_id"}.issubset(args.keys())
 
 
 add_contact_tool = register(Tool(
@@ -107,16 +107,15 @@ add_contact_tool = register(Tool(
                 "type": "string",
                 "description": "Contact's name, transliterated to Latin letters if given in Hebrew (e.g. 'אמא' -> 'Mom').",
             },
-            "whatsapp_number": {
+            "chat_id": {
                 "type": "string",
                 "description": (
-                    "International format, digits only, no '+'. Convert an Israeli local number "
-                    "(05X-XXXXXXX) to 972XXXXXXXXX."
+                    "The contact's Telegram chat id, digits only (for example 123456789)."
                 ),
             },
             "reply_text": {"type": "string", "description": "A short confirmation that the contact was saved."},
         },
-        "required": ["name", "whatsapp_number", "reply_text"],
+        "required": ["name", "chat_id", "reply_text"],
     },
     handler=lambda user, args: _handle_add_contact(user, args, args.get("reply_text") or FALLBACK_REPLY),
     validate=_validate_add_contact_args,

@@ -19,8 +19,8 @@ def openai_configured(monkeypatch):
 
 
 def test_preferences_are_persistent_and_isolated(db_path, make_user):
-    a = admin_get_user(make_user(whatsapp_number="972500000081"))
-    b = admin_get_user(make_user(whatsapp_number="972500000082"))
+    a = admin_get_user(make_user(chat_id="972500000081"))
+    b = admin_get_user(make_user(chat_id="972500000082"))
     set_ai_provider(a["id"], "openai")
     assert get_ai_provider(a["id"]) == "openai"
     assert get_ai_provider(b["id"]) is None
@@ -191,10 +191,10 @@ def test_a_forwarded_message_cannot_change_the_provider(db_path, make_user):
 
 def test_whole_message_pipeline_scopes_the_senders_provider(client, make_user):
     """End to end through the webhook: user A on OpenAI never leaks into user B's request."""
-    from .conftest import post_webhook, whatsapp_text_payload
+    from .conftest import post_update, telegram_text_update
 
-    a = admin_get_user(make_user(whatsapp_number="972500000091"))
-    make_user(whatsapp_number="972500000092")
+    a = admin_get_user(make_user(chat_id="972500000091"))
+    make_user(chat_id="972500000092")
     set_ai_provider(a["id"], "openai")
     seen = []
 
@@ -204,19 +204,19 @@ def test_whole_message_pipeline_scopes_the_senders_provider(client, make_user):
 
     with patch("src.tools.gemini_adapter.classify_with_tools", side_effect=fake_classify), \
          patch("src.webhook_handler.send_text_message", return_value=True):
-        post_webhook(client, whatsapp_text_payload("972500000091", "hi", message_id="wamid.A"))
-        post_webhook(client, whatsapp_text_payload("972500000092", "hi", message_id="wamid.B"))
+        post_update(client, telegram_text_update("972500000091", "hi", message_id=1))
+        post_update(client, telegram_text_update("972500000092", "hi", message_id=2))
     assert seen == ["openai", "gemini"]
     assert current_provider() == "gemini"
 
 
 def test_provider_command_in_a_real_message_switches_without_calling_a_model(client, make_user, openai_configured):
-    from .conftest import post_webhook, whatsapp_text_payload
+    from .conftest import post_update, telegram_text_update
 
-    user = admin_get_user(make_user(whatsapp_number="972500000091"))
+    user = admin_get_user(make_user(chat_id="972500000091"))
     with patch("src.tools.gemini_adapter.classify_with_tools") as classify, \
          patch("src.webhook_handler.send_text_message", return_value=True) as send:
-        post_webhook(client, whatsapp_text_payload("972500000091", "עבור ל־OpenAI"))
+        post_update(client, telegram_text_update("972500000091", "עבור ל־OpenAI"))
     classify.assert_not_called()
     assert get_ai_provider(user["id"]) == "openai"
     assert "OpenAI" in send.call_args.kwargs["body"]

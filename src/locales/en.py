@@ -17,8 +17,8 @@ MESSAGES = {
     # ----- reminders -----
     "reminder.delivery_failed_notice": (
         "⚠️ I couldn't deliver the reminder to {recipient}: \"{content}\". "
-        "Probably because they haven't messaged the bot in the last 24 hours "
-        "(a WhatsApp limit). Ask them to send the bot any message."
+        "Probably because they haven't started a chat with the bot yet, or blocked it. "
+        "Ask them to open the bot and press Start."
     ),
     "reminder.delivery_failed_logged": "⚠️ I couldn't deliver the reminder to {recipient}.",
     "reminder.from_owner": " from {owner}",
@@ -162,15 +162,15 @@ MESSAGES = {
         "If you haven't connected Google yet, you can say \"connect my Gmail\"."
     ),
 
-    # ----- Google OAuth callback (browser page + the WhatsApp message that follows) -----
+    # ----- Google OAuth callback (browser page + the Telegram message that follows) -----
     "oauth.page_direction": "ltr",
     "oauth.success_title": "✅ Connected!",
-    "oauth.success_body": "You can close this window and go back to WhatsApp.",
+    "oauth.success_body": "You can close this window and go back to Telegram.",
     "oauth.error_title": "⚠️ Connection failed",
-    "oauth.error_footer": "You can go back to WhatsApp and try again.",
+    "oauth.error_footer": "You can go back to Telegram and try again.",
     "oauth.cancelled_message": "The Google connection was cancelled. You can try again any time.",
     "oauth.cancelled_page": "The permission was cancelled.",
-    "oauth.expired_link": "The link has expired. Ask for a new link in WhatsApp.",
+    "oauth.expired_link": "The link has expired. Ask for a new link in Telegram.",
     "oauth.user_not_found": "User not found.",
     "oauth.bad_request": "Invalid request.",
     "oauth.failed_message": "The Google connection failed, want to try again?",
@@ -284,8 +284,8 @@ MESSAGES = {
     "wh.manage_proactive_settings.10": "Updated - at most {cap} proactive notifications per day.",
     "wh.manage_proactive_settings.11": "How many minutes before a meeting would you like me to remind you?",
     "wh.manage_proactive_settings.12": "Updated - I'll send a briefing {lead_minutes} minutes before every meeting.",
-    "wh.manage_vip_senders.1": "Which email address or phone number would you like to add as a VIP?",
-    "wh.manage_vip_senders.2": "I couldn't find a contact named \"{identifier}\". Can you give me their email address or phone number directly?",
+    "wh.manage_vip_senders.1": "Which email address or Telegram chat id would you like to add as a VIP?",
+    "wh.manage_vip_senders.2": "I couldn't find a contact named \"{identifier}\". Can you give me their email address or Telegram chat id directly?",
     "wh.manage_vip_senders.3": "I added {identifier}{label_part} to your VIP list - updates related to them will bypass quiet hours.",
     "wh.manage_vip_senders.4": "You have nobody on your VIP list right now.",
     "wh.manage_vip_senders.5": "Who should I remove from the VIP list?",
@@ -367,12 +367,12 @@ MESSAGES = {
     "wh.match_reminder.2": "I couldn't tell which reminder you meant. Say \"what's scheduled\" to see the full list.",
     "wh.match_reminder.3": "A few reminders match that description, can you be more specific? (say \"what's scheduled\" for the full list)",
     "wh.user_manage.1": "User management is available to the system administrator only.",
-    "wh.user_manage.2": "The number doesn't look valid. Can you give it in international format, for example 972501234567?",
+    "wh.user_manage.2": "The chat id doesn't look valid. It is a number (for example 123456789) you get from @userinfobot or from this bot's /id command.",
     "wh.user_manage.3": "{display_name} is already an active user.",
     "wh.user_manage.4": "✅ I re-enabled {display_name} ({number}).",
     "wh.user_manage.5": "I couldn't add the user, can you try again?",
-    "wh.user_manage.6": "✅ {display_name} ({number}) can now use the bot.\nThey should send any message to get started — that also opens the 24-hour window that lets me send them reminders.",
-    "wh.user_manage.7": "I couldn't find a user with the number {number}.",
+    "wh.user_manage.6": "✅ {display_name} ({number}) can now use the bot.\nThey need to open the bot in Telegram and press Start so I can message them and send reminders.",
+    "wh.user_manage.7": "I couldn't find a user with the chat id {number}.",
     "wh.user_manage.8": "I won't disable you from yourself — do that from the dashboard if you're sure.",
     "wh.user_manage.9": "{display_name} is already disabled.",
     "wh.user_manage.10": "🚫 {display_name} ({number}) can no longer use the bot. Their data was kept.",
@@ -431,7 +431,7 @@ MESSAGES = {
     "wh.manage_my_data.9": "🔗 Saved links: {saved_links}",
     "wh.manage_my_data.10": "🧠 Facts saved about you: {remembered_facts}",
     "wh.manage_my_data.11": "Here's what I have saved about you:\n\n",
-    "wh.reminder.2": "Add the contact {name} + their phone number.",
+    "wh.reminder.2": "Add the contact {name} + their Telegram chat id.",
     "wh.persistent_reminders.7": " ({schedule_desc}, renews each time)",
     "wh.persistent_reminders.8": "now",
     "wh.persistent_reminders.9": "the scheduled time",
@@ -522,5 +522,10 @@ MESSAGES = {
     # ----- welcome message sent to newly added users -----
     "welcome.operator_suffix": " of {operator}",
     "welcome.openai_note": " (or to OpenAI, if you choose it)",
-    "welcome.message": "👋 You were added to the personal assistant{who}.\nWhat's worth knowing about your data: your messages are sent to Google's Gemini{openai_note} and pass through Meta's WhatsApp, and whoever runs the bot can technically read them.\nPrivacy policy: {privacy_url}\nTerms of use: {terms_url}\nYou can write to me any time \"show me what you have on me\" or \"delete my history\".",
+    "welcome.message": "👋 You were added to the personal assistant{who}.\nWhat's worth knowing about your data: your messages are sent to Google's Gemini{openai_note} and pass through Telegram, and whoever runs the bot can technically read them.\nPrivacy policy: {privacy_url}\nTerms of use: {terms_url}\nYou can write to me any time \"show me what you have on me\" or \"delete my history\".",
+
+    # ----- Telegram intake -----
+    "telegram.not_a_user": "This chat isn't registered with the bot yet. Whoever runs the bot needs to add your chat id: {chat_id}",
+    "telegram.start": "Hi{name}! I'm ready. You can write to me for example \"remind me tomorrow at 9 to call the doctor\", or /help for a list of what I can do.",
+    "telegram.your_chat_id": "Your chat id: {chat_id}",
 }

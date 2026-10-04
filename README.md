@@ -1,19 +1,19 @@
-# Pika — a personal WhatsApp assistant
+# Pika — a personal Telegram assistant
 
-[![Tests](https://github.com/marikbrest/pika-personal-whatsapp-bot/actions/workflows/tests.yml/badge.svg)](https://github.com/marikbrest/pika-personal-whatsapp-bot/actions/workflows/tests.yml)
+[![Tests](https://github.com/marikbrest/pika-telegram-bot/actions/workflows/tests.yml/badge.svg)](https://github.com/marikbrest/pika-telegram-bot/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 Pika is a self-hosted assistant for you and your family that lives entirely inside
-WhatsApp. Message it (text or voice; Hebrew-first, understands English) and it handles reminders, Google
+Telegram. Message it (text or voice; Hebrew-first, understands English) and it handles reminders, Google
 Calendar, Gmail, weather and market prices — and, if you opt in, it watches your calendar
 and inbox in the background and only interrupts you when something is genuinely worth it.
 
 Everything runs on your own machine: one FastAPI process, one SQLite file, your own
-Meta/Google/Gemini credentials. No SaaS in the middle, nothing to sign up for.
+Telegram/Google/Gemini credentials. No SaaS in the middle, nothing to sign up for.
 
 ## What it can do
 
-<p align="center"><img src="docs/example-chat.svg" alt="Example WhatsApp conversation with Pika: scheduling a lunch, a nag-until-done reminder for a kid, and a proactive meeting alert" width="420"></p>
+<p align="center"><img src="docs/example-chat.svg" alt="Example conversation with Pika: scheduling a lunch, a nag-until-done reminder for a kid, and a proactive meeting alert" width="420"></p>
 
 <p align="center"><sub>Illustrative example — the reply wording is taken from the bot's real response formats; names and times are made up.</sub></p>
 
@@ -66,10 +66,10 @@ Everything is covered by 900+ tests that run with no credentials or network.
 | Requirement | Notes |
 | --- | --- |
 | Python 3.12+ (CI tests 3.12, 3.13 and 3.14) | any OS; Windows scripts are provided, Linux/macOS notes below |
-| A WhatsApp Business Cloud API app | free Meta developer account; a test number works to start |
+| A Telegram bot token | free, 2 minutes with [@BotFather](https://t.me/BotFather) - see [the Telegram setup guide](./docs/SETUP_TELEGRAM.md) |
 | A Gemini API key | [Google AI Studio](https://aistudio.google.com/) — a project **with billing enabled** if you connect Gmail/Calendar/Drive or serve other people (the free tier lets Google use submitted content to improve its products; see [Terms & privacy](./docs/TERMS_TEMPLATE.md)) |
 | A Google Cloud OAuth client | only for Calendar/Gmail/Drive features |
-| A public HTTPS URL pointing at the bot | Cloudflare Tunnel (free) is what this project uses |
+| A public HTTPS URL pointing at the bot | only for Google sign-in and the privacy pages (and webhook mode); Cloudflare Tunnel (free) works well. Pure Telegram chat needs none (long polling). |
 
 Typical running cost is a few dollars a month of Gemini usage for a small family — see [docs/COSTS.md](./docs/COSTS.md) for real numbers.
 
@@ -85,10 +85,10 @@ any intent still lacks a tools equivalent.
 
 ```mermaid
 graph TD
-    WA[Family members - WhatsApp]
+    WA[Family members - Telegram]
     Admin[Admin - browser]
 
-    Meta[WhatsApp Cloud API]
+    Meta[Telegram Bot API]
     CF[Cloudflare Tunnel]
 
     subgraph App[FastAPI application - single process, single-instance lock]
@@ -110,8 +110,7 @@ graph TD
     MiscAPIs[Weather, market data, Ship24, web pages, GCP billing]
 
     WA -->|messages| Meta
-    Meta -->|webhook POST, HMAC-signed| CF
-    CF --> Webhook
+    Meta -->|long polling, or webhook with secret header| Webhook
     Webhook -->|reply| Meta
     Meta -->|delivers| WA
 
@@ -143,7 +142,7 @@ graph TD
 A full file-tree view of the repo (auto-generated on every push to `main`) lives at
 [`design/repo-diagram.svg`](./design/repo-diagram.svg).
 
-## Try it in 2 minutes (no WhatsApp needed)
+## Try it in 2 minutes (no Telegram needed)
 
 All you need is a Gemini key. The sandbox runs the real message pipeline in your terminal:
 
@@ -158,25 +157,23 @@ you> remind me tomorrow at 9 to call the doctor
 
 <p align="center"><sub>A real <code>scripts/chat.py</code> session against Gemini (output recorded as-is, then animated). Replies the code composes itself follow <code>LOCALE</code> (<code>he</code> or <code>en</code>); this recording used the Hebrew default.</sub></p>
 
-It uses a throwaway database and prints what the bot *would* have sent over WhatsApp.
+It uses a throwaway database and prints what the bot *would* have sent over Telegram.
 (Calendar/Gmail/Drive need a real Google OAuth setup and are unavailable here.)
 With Docker: `docker compose run --rm bot python scripts/chat.py`.
 
 ## Quick setup
 
 ```bash
-git clone https://github.com/marikbrest/pika-personal-whatsapp-bot.git
-cd pika-personal-whatsapp-bot
+git clone https://github.com/marikbrest/pika-telegram-bot.git
+cd pika-telegram-bot
 python -m venv venv
 venv\Scripts\activate          # Windows   (Linux/macOS: source venv/bin/activate)
 pip install -r requirements.txt
 cp .env.example .env            # Windows: copy .env.example .env  - then fill it in
 ```
 
-1. **WhatsApp**: in [Meta for Developers](https://developers.facebook.com/) create an app
-   with the WhatsApp product. Put the access token, phone-number ID and app secret in
-   `.env`, pick any random `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, and set the webhook URL to
-   `https://<your-domain>/webhook` (subscribe to `messages`).
+1. **Telegram**: create a bot with [@BotFather](https://t.me/BotFather), put its token in `TELEGRAM_BOT_TOKEN`.
+   The default `TELEGRAM_MODE=polling` needs no public URL. ([Details](./docs/SETUP_TELEGRAM.md).)
 2. **Gemini**: put your key in `GEMINI_API_KEY`.
 3. **Encryption key**: generate `TOKEN_ENCRYPTION_KEY` (command in `.env.example`).
 4. **Google** (optional, for Calendar/Gmail): create an OAuth client, add
@@ -184,12 +181,13 @@ cp .env.example .env            # Windows: copy .env.example .env  - then fill i
 5. **Create the first admin** (users can only be added by an existing admin, so the first
    one is created from the command line):
    ```bash
-   python scripts/create_admin.py 972501234567 "Your Name"
+   python scripts/create_admin.py 123456789 "Your Name"
    ```
-6. **Run it** (next section), then message your WhatsApp number. Say *"add user: Mom,
-   0501234567"* to let family in.
+   (`123456789` is your Telegram chat id: message [@userinfobot](https://t.me/userinfobot) to get it.)
+6. **Run it** (next section), open your bot in Telegram and press Start. Say *"add user: Mom,
+   987654321"* to let family in - they press Start in the bot first, and the bot tells them their chat id.
 
-New to Meta's side? Follow the step-by-step [WhatsApp setup guide](./docs/SETUP_META.md). Verify everything with `python scripts/doctor.py --online --url https://<your-domain>`. See section 7 of [PRD.md](./PRD.md) for Cloudflare Tunnel details.
+Verify everything with `python scripts/doctor.py --online`. See section 7 of [PRD.md](./PRD.md) for Cloudflare Tunnel details.
 
 ### Run with Docker (any OS)
 
@@ -198,33 +196,17 @@ No Python setup needed:
 ```bash
 cp .env.example .env                 # fill it in (see steps above)
 docker compose up -d --build
-docker compose run --rm bot python scripts/create_admin.py 972501234567 "Your Name"
+docker compose run --rm bot python scripts/create_admin.py 123456789 "Your Name"
 ```
 
 The bot listens on `127.0.0.1:8000`; data lives in the `pika-data` volume. The container runs as an unprivileged user (UID 10001) with a built-in health check; if you bind-mount a host folder instead of the volume, `chown -R 10001` it. For a public
 HTTPS URL, create a Cloudflare Tunnel, put its token in `CLOUDFLARE_TUNNEL_TOKEN`, route it
 to `http://bot:8000`, and run `docker compose --profile tunnel up -d`.
 
-### WhatsApp message templates
+### No templates, no 24-hour window
 
-WhatsApp only lets a business message someone first (reminders, alerts, proactive
-updates) with a **pre-approved template** once the user's 24-hour chat window has closed.
-Create these in WhatsApp Manager (category *Utility*, any language; set
-`WHATSAPP_TEMPLATE_LANGUAGE` in `.env` to the language you created them in, default `he`). Wording is yours; only the **number of `{{n}}`
-parameters** must match:
-
-| Template name | Parameters | Used for |
-| --- | --- | --- |
-| `reminder_notification` | 1 — the reminder text | reminders outside the 24h window |
-| `package_status_update` | 3 — label, old status, new status | package tracking |
-| `google_reconnect_needed` | 1 — the reconnect link | Google token expired |
-| `proactive_update` | 1 — the update text | proactive mode outside the 24h window |
-| `welcome_user` | 2 — privacy-policy URL, terms URL | one-time welcome sent when you add a user (needs `PUBLIC_BASE_URL`) |
-
-Meta may reclassify a template as *Marketing* if the wording looks promotional — keep the
-text plainly transactional ("update about your calendar: {{1}}") and appeal via
-Business Support if it happens. Until a template is approved, sends inside the 24-hour
-window still work; only out-of-window sends fail.
+Unlike business messaging APIs, Telegram lets a bot message anyone who has pressed **Start** at any time, so
+reminders, alerts and proactive updates are always plain text and there is nothing to get approved.
 
 ### AI providers (Gemini, optionally OpenAI)
 
@@ -245,14 +227,14 @@ and email content is sent to Gemini for classification/wording only; see
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/chat.py` | talk to the bot from the terminal, no WhatsApp/Meta |
-| `scripts/doctor.py [--online] [--url URL]` | checks `.env`, keys, DB, Gemini/WhatsApp tokens and the public webhook handshake, and says what to fix |
+| `scripts/chat.py` | talk to the bot from the terminal, no Telegram needed |
+| `scripts/doctor.py [--online] [--url URL]` | checks `.env`, keys, DB, Gemini/Telegram tokens and the public URL, and says what to fix |
 | `scripts/create_admin.py <number> "<name>"` | create/promote the first admin |
 | `scripts/backup_db.py` | consistent database backup (any OS) |
 
 Using Claude Code? Open this folder in it - [CLAUDE.md](./CLAUDE.md) walks it through installing and changing the project.
 
-Guides: [Meta/WhatsApp setup](./docs/SETUP_META.md) · [Troubleshooting](./TROUBLESHOOTING.md) · [Costs](./docs/COSTS.md) · [Privacy notes for operators](./docs/PRIVACY_FOR_OPERATORS.md) ([עברית](./docs/PRIVACY_FOR_OPERATORS.he.md)) · [Terms & privacy pages](./docs/TERMS_TEMPLATE.md) ([עברית](./docs/TERMS_TEMPLATE.he.md)) · [Adding a capability](./docs/ADDING_A_TOOL.md) · [AI providers](./docs/ADDING_A_PROVIDER.md) · [Roadmap](./ROADMAP.md) · [Changelog](./CHANGELOG.md) · [Contributing](./CONTRIBUTING.md)
+Guides: [Telegram setup](./docs/SETUP_TELEGRAM.md) · [Troubleshooting](./TROUBLESHOOTING.md) · [Costs](./docs/COSTS.md) · [Privacy notes for operators](./docs/PRIVACY_FOR_OPERATORS.md) ([עברית](./docs/PRIVACY_FOR_OPERATORS.he.md)) · [Terms & privacy pages](./docs/TERMS_TEMPLATE.md) ([עברית](./docs/TERMS_TEMPLATE.he.md)) · [Adding a capability](./docs/ADDING_A_TOOL.md) · [AI providers](./docs/ADDING_A_PROVIDER.md) · [Roadmap](./ROADMAP.md) · [Changelog](./CHANGELOG.md) · [Contributing](./CONTRIBUTING.md)
 
 ### Google Cloud OAuth setup gotcha
 
@@ -300,7 +282,7 @@ and cloudflared windows, there is a Task Scheduler registration script:
 powershell -ExecutionPolicy Bypass -File .\scripts\register_startup_task.ps1
 ```
 
-This registers a task named `PersonalAssistantWhatsApp` that runs at every Windows logon
+This registers a task named `PersonalAssistantTelegram` that runs at every Windows logon
 (AtLogOn). It prints status every 30 seconds and automatically restarts uvicorn or
 cloudflared if either one dies.
 
@@ -312,7 +294,7 @@ project folder (not committed to git).
 **Trigger immediately without logging out:**
 
 ```powershell
-Start-ScheduledTask -TaskName "PersonalAssistantWhatsApp"
+Start-ScheduledTask -TaskName "PersonalAssistantTelegram"
 ```
 
 **Controlled stop** (for example before a `git pull` that requires a restart):
@@ -327,7 +309,7 @@ manually (Ctrl+C) and start it again with `Start-ScheduledTask`.
 **Remove the task entirely:**
 
 ```powershell
-Unregister-ScheduledTask -TaskName "PersonalAssistantWhatsApp" -Confirm:$false
+Unregister-ScheduledTask -TaskName "PersonalAssistantTelegram" -Confirm:$false
 ```
 
 > After a restart, allow roughly 20–30 seconds before testing. The tunnel needs a few
@@ -381,7 +363,7 @@ tokens in a restored database cannot be decrypted (users just reconnect Google).
 
 ### Reminders
 
-Reminders can be one-off, daily, or weekly, and are delivered as WhatsApp messages at
+Reminders can be one-off, daily, or weekly, and are delivered as Telegram messages at
 the scheduled time. If the machine was off when a reminder was due, it is delivered on
 the next run rather than lost.
 
@@ -400,22 +382,17 @@ the next run rather than lost.
 
 The bot can also remind other people, not just you:
 
-1. **Add a contact:** *"add contact: Mom, 0501234567"* (converted to international
-   format automatically, and the name is stored in English)
+1. **Add a contact:** *"add contact: Mom, 987654321"* (her Telegram chat id; the
+   name is stored in English)
 2. **Remind that contact:** *"remind Danny on Tuesday at 14:00 to check the car"*
 3. If the name is not among the saved contacts, the bot asks you to add it first rather
    than failing silently.
 
-⚠️ **A WhatsApp limitation, not ours:** an outbound message to someone who has not
-messaged your number in the last 24 hours **requires** a Meta-approved message template.
-Until Business Verification and template approval are complete (see PRD section 3),
-reminders to contacts who have not messaged the bot recently **will fail at send time**,
-even though the code considers everything valid. In that case the bot notifies you and
-advances the reminder rather than retrying forever.
+⚠️ **The contact must be a Telegram user of the bot.** Telegram bots can only message people who pressed **Start** in
+the bot, so a contact is saved with their Telegram chat id, and a reminder to someone who never started the bot (or
+blocked it) fails at send time. In that case the bot tells you and advances the reminder rather than retrying forever.
 
-Reminders to yourself are unaffected, since you are already in an active conversation
-with the number. The simplest workaround for family members is to register them as
-**users** (below) — once they message the bot themselves, the 24-hour window stays open.
+The simplest way to remind family members is to register them as **users** (below).
 
 ### Email (Gmail)
 
@@ -497,8 +474,8 @@ that take an ID also verify ownership, as defence in depth.
 Users are managed either from the dashboard or, for admins, through chat:
 
 - *"who uses the bot"* — list users
-- *"add user: Dad, 0501234567"* — grant access
-- *"block 0501234567"* — revoke access (reversible; data is retained)
+- *"add user: Dad, 123456789"* — grant access (the number is their Telegram chat id)
+- *"block 123456789"* — revoke access (reversible; data is retained)
 
 Only users with `is_admin = 1` can do this. Granting admin is deliberately a manual
 database operation, never automatic — use `python scripts/create_admin.py <number> "<name>"`
@@ -550,8 +527,6 @@ LOCALE=en
   `tests/test_i18n.py` fails if the catalogs drift apart (different keys or `{placeholders}`).
 - Prompts that produce text for the user (summaries, search answers, proactive wording) tell the model
   which language to answer in. The weather lookup follows `LOCALE` too.
-- `LOCALE` does **not** change `WHATSAPP_TEMPLATE_LANGUAGE`: messages sent outside the 24-hour window use your
-  approved templates, so approve them in the same language and set both. `scripts/doctor.py` warns when they differ.
 - Package statuses stored in the database stay fixed strings whatever the locale; only what the user sees is translated.
 - **Not translated yet** (follow-ups welcome): the admin dashboard pages (`src/admin_handler.py`), tool descriptions in
   `src/tools/`, the internal Hebrew prompts used for classification, and the Hebrew phrases matched by the provider-switch
@@ -570,16 +545,16 @@ A few small, genuinely family-specific spots are meant to be edited, not auto-de
 - `notify_on_reminder_delivery_failure` and `kid_facing_role` on the `users` table (see
   [`src/db/models.py`](./src/db/models.py)) — off/unset for everyone by default; set them
   for your own parent accounts with a one-off `UPDATE users SET ... WHERE
-  whatsapp_number = '...'` after your first users are registered.
+  chat_id = '...'` after your first users are registered.
 - `PUBLIC_BASE_URL` in `.env` — makes the bot send each newly added user a one-time welcome with your `/privacy` and `/terms` links.
 - `OPERATOR_NAME` and `ADMIN_CONTACT_EMAIL` in `.env` — shown on the `/about`, `/privacy` and `/terms` pages Google's
   OAuth consent screen requires (see the Google OAuth gotcha in "Quick setup" above).
 - Regional settings in `.env` if you are not in Israel: `DEFAULT_TIMEZONE`,
-  `DEFAULT_LOCATION` (weather default) and `WHATSAPP_TEMPLATE_LANGUAGE`.
+  and `DEFAULT_LOCATION` (weather default).
 
 ## Questions
 
-Open an [issue](https://github.com/marikbrest/pika-personal-whatsapp-bot/issues) or a discussion, or email
+Open an [issue](https://github.com/marikbrest/pika-telegram-bot/issues) or a discussion, or email
 [marik.brest@gmail.com](mailto:marik.brest@gmail.com). For security problems, use [SECURITY.md](./SECURITY.md) instead.
 This address is for questions about the project; the privacy contact for a running bot is whoever operates it.
 

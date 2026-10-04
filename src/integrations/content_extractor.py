@@ -32,7 +32,7 @@ def _is_unsafe_address(host: str) -> bool:
     the fetch runs from inside the home network - so the request could
     otherwise reach the Zabbix API (localhost:8081), the UniFi controller
     (192.168.1.1), or anything else on the LAN, and the bot would happily
-    read the response back to the user over WhatsApp.
+    read the response back to the user over Telegram.
 
     Resolves DNS itself and checks the resolved IP(s), not just the literal
     hostname string - a hostname that LOOKS external can still resolve to an

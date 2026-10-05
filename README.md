@@ -9,7 +9,7 @@ Calendar, Gmail, weather and market prices — and, if you opt in, it watches yo
 and inbox in the background and only interrupts you when something is genuinely worth it.
 
 > This is the **Telegram edition**, split off from [pika-personal-whatsapp-bot](https://github.com/marikbrest/pika-personal-whatsapp-bot)
-> (the WhatsApp version) so each channel keeps its own repository. The tool pipeline is shared in spirit; fixes may be ported between them.
+> (the WhatsApp version) so each channel keeps its own repository. It was tested against the real Telegram Bot API on a Linux VM (commands, free chat through Gemini, a reminder delivered on time); voice, photos and webhook mode are covered by mocked tests only. The tool pipeline is shared in spirit; fixes may be ported between them.
 
 Everything runs on your own machine: one FastAPI process, one SQLite file, your own
 Telegram/Google/Gemini credentials. No SaaS in the middle, nothing to sign up for.
